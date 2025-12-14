@@ -1,5 +1,15 @@
 {
-    "buildCommand": "echo 'Using pre-built files'",
-    "outputDirectory": "dist",
-    "installCommand": "echo 'No install needed'"
+    "version": 2,
+    "builds": [
+        {
+            "src": "dist/**",
+            "use": "@vercel/static"
+        }
+    ],
+    "routes": [
+        {
+            "src": "/(.*)",
+            "dest": "/dist/$1"
+        }
+    ]
 }
