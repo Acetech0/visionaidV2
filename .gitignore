@@ -1,8 +1,8 @@
 # Dependencies
 node_modules
 
-# Build output
-dist
+# Build output (commented out to deploy to Vercel)
+# dist
 .vercel
 
 # Environment variables
