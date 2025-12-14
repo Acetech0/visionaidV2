@@ -86,13 +86,15 @@ class AudioGuide {
      * @param {string} zone - Associated zone for cooldown tracking
      */
     speak(message, priority = 'normal', zone = null) {
-        if (!this.isInitialized) return;
+        if (!this.isInitialized || !this.synthesis) return;
+
+        // Don't queue new messages if already speaking (unless critical)
+        if (this.isSpeaking && priority !== 'critical') {
+            return;
+        }
 
         // Check cooldown
         if (zone && !this.canSpeak(zone, priority)) {
-            if (CONFIG.DEBUG.LOG_DETECTIONS) {
-                console.log(`[AudioGuide] Cooldown active for ${zone}`);
-            }
             return;
         }
 
@@ -101,42 +103,52 @@ class AudioGuide {
             this.cancelNonCritical();
         }
 
-        // Create utterance
-        const utterance = new SpeechSynthesisUtterance(message);
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
+        try {
+            // Create utterance
+            const utterance = new SpeechSynthesisUtterance(message);
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
 
-        // Set voice (prefer female voice for calmness)
-        const voices = this.synthesis.getVoices();
-        const preferredVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Female'));
-        if (preferredVoice) {
-            utterance.voice = preferredVoice;
+            // Set voice (prefer female voice for calmness)
+            const voices = this.synthesis.getVoices();
+            if (voices.length > 0) {
+                const preferredVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Female'));
+                if (preferredVoice) {
+                    utterance.voice = preferredVoice;
+                }
+            }
+
+            // Event handlers
+            utterance.onstart = () => {
+                this.isSpeaking = true;
+                if (CONFIG.DEBUG.LOG_DETECTIONS) {
+                    console.log(`[AudioGuide] Speaking: "${message}" (${priority})`);
+                }
+            };
+
+            utterance.onend = () => {
+                this.isSpeaking = false;
+                if (zone) {
+                    this.lastMessageTime[zone] = Date.now();
+                    this.lastSpokenZone = zone;
+                }
+            };
+
+            utterance.onerror = (event) => {
+                // Silently handle errors to avoid console spam
+                this.isSpeaking = false;
+                if (zone) {
+                    this.lastMessageTime[zone] = Date.now();
+                }
+            };
+
+            // Speak
+            this.synthesis.speak(utterance);
+        } catch (error) {
+            console.warn('[AudioGuide] Speech failed:', error.message);
+            this.isSpeaking = false;
         }
-
-        // Event handlers
-        utterance.onstart = () => {
-            this.isSpeaking = true;
-            if (CONFIG.DEBUG.LOG_DETECTIONS) {
-                console.log(`[AudioGuide] Speaking: "${message}" (${priority})`);
-            }
-        };
-
-        utterance.onend = () => {
-            this.isSpeaking = false;
-            if (zone) {
-                this.lastMessageTime[zone] = Date.now();
-                this.lastSpokenZone = zone;
-            }
-        };
-
-        utterance.onerror = (event) => {
-            console.error('[AudioGuide] Speech error:', event);
-            this.isSpeaking = false;
-        };
-
-        // Speak
-        this.synthesis.speak(utterance);
     }
 
     /**

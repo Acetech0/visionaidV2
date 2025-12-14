@@ -149,10 +149,26 @@ class GeometryValidator {
             return { mean: 0, min: 0, max: 0, stdDev: 0 };
         }
 
-        const mean = depthArray.reduce((sum, val) => sum + val, 0) / depthArray.length;
-        const min = Math.min(...depthArray);
-        const max = Math.max(...depthArray);
-        const variance = depthArray.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / depthArray.length;
+        let sum = 0;
+        let min = Infinity;
+        let max = -Infinity;
+
+        // Calculate mean, min, max in single pass
+        for (let i = 0; i < depthArray.length; i++) {
+            const val = depthArray[i];
+            sum += val;
+            if (val < min) min = val;
+            if (val > max) max = val;
+        }
+
+        const mean = sum / depthArray.length;
+
+        // Calculate variance
+        let varianceSum = 0;
+        for (let i = 0; i < depthArray.length; i++) {
+            varianceSum += Math.pow(depthArray[i] - mean, 2);
+        }
+        const variance = varianceSum / depthArray.length;
         const stdDev = Math.sqrt(variance);
 
         return { mean, min, max, stdDev };
