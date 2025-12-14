@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="VisionAid - Advanced Camera Interface">
+    <title>VisionAid Camera Interface</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <main class="main-container">
+        <div class="camera-box">
+            <div class="camera-header">
+                <div class="status-indicator"></div>
+                <h1>Live Feed</h1>
+            </div>
+            <div class="video-wrapper">
+                <video id="camera-feed" autoplay playsinline muted></video>
+                <div id="camera-error" class="error-message hidden">
+                    <p>Camera access denied or unavailable</p>
+                    <button id="retry-btn">Retry Access</button>
+                </div>
+                <div id="loading-spinner" class="spinner"></div>
+            </div>
+            <div class="camera-controls">
+                <!-- Placeholder for future controls -->
+                <button id="toggle-camera-btn" class="control-btn active" aria-label="Camera On/Off">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z">
+                        </path>
+                        <circle cx="12" cy="13" r="4"></circle>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </main>
+    <script src="script.js"></script>
+</body>
+
+</html>
