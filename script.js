@@ -318,10 +318,10 @@ class VisionAidApp {
             this.errorMessage.classList.add('hidden');
             this.loadingSpinner.classList.remove('hidden');
 
-            // Always use back camera for obstacle detection
+            // Use front camera for now (change to 'environment' for back camera on mobile)
             const constraints = {
                 video: {
-                    facingMode: 'environment',
+                    facingMode: 'user',
                     width: { ideal: 1920 },
                     height: { ideal: 1080 }
                 },
@@ -330,7 +330,7 @@ class VisionAidApp {
 
             this.currentStream = await navigator.mediaDevices.getUserMedia(constraints);
             this.videoElement.srcObject = this.currentStream;
-            this.videoElement.style.transform = 'scaleX(1)';
+            this.videoElement.style.transform = 'scaleX(-1)'; // Mirror for front camera
 
             this.videoElement.onloadedmetadata = () => {
                 this.loadingSpinner.classList.add('hidden');
