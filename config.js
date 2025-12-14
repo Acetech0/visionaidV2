@@ -20,12 +20,12 @@ export const CONFIG = {
     DEPTH_SPIKE_THRESHOLD: 0.4,     // Sudden depth change threshold
     DEPTH_STABILITY_THRESHOLD: 0.1, // Max variance for "stable" depth
 
-    // Audio guidance cooldowns (milliseconds)
+    // Audio guidance cooldowns (milliseconds) - speak every 1 second
     COOLDOWN: {
-        VERY_CLOSE: 0,      // No cooldown for immediate danger
-        NEAR: 3000,         // 3 seconds
-        CLEAR: 5000,        // 5 seconds
-        UNCERTAIN: 2000     // 2 seconds
+        VERY_CLOSE: 2000,   // 1 second
+        NEAR: 2000,         // 1 second
+        CLEAR: 2000,        // 1 second
+        UNCERTAIN: 2000     // 1 second
     },
 
     // Model configuration
