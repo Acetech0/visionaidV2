@@ -1,3 +1,5 @@
 {
-    "outputDirectory": "dist"
+    "buildCommand": "echo 'Using pre-built files'",
+    "outputDirectory": "dist",
+    "installCommand": "echo 'No install needed'"
 }
