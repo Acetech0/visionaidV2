@@ -7,32 +7,75 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentStream = null;
     let isCameraOn = true;
-    const toggleBtn = document.getElementById('toggle-camera-btn');
+    let currentFacingMode = 'user'; // 'user' or 'environment'
+    let videoDevices = [];
+    let currentDeviceIndex = 0;
 
-    async function startCamera() {
+    const toggleBtn = document.getElementById('toggle-camera-btn');
+    const switchBtn = document.getElementById('switch-camera-btn');
+
+    async function getVideoDevices() {
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+            // Ensure button is visible
+            switchBtn.style.display = 'flex';
+        } catch (err) {
+            console.error("Error enumerating devices:", err);
+        }
+    }
+
+    async function startCamera(deviceId = null) {
         try {
             // If already on, don't restart (unless retrying from error)
-            if (currentStream && currentStream.active) return;
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
 
             errorMessage.classList.add('hidden');
             loadingSpinner.classList.remove('hidden');
 
-            currentStream = await navigator.mediaDevices.getUserMedia({
+            const constraints = {
                 video: {
                     width: { ideal: 1920 },
-                    height: { ideal: 1080 },
-                    facingMode: "user"
+                    height: { ideal: 1080 }
                 },
                 audio: false
-            });
+            };
+
+            if (deviceId) {
+                constraints.video.deviceId = { exact: deviceId };
+            } else {
+                constraints.video.facingMode = currentFacingMode;
+            }
+
+            currentStream = await navigator.mediaDevices.getUserMedia(constraints);
 
             videoElement.srcObject = currentStream;
+
+            // Mirror effect only for user-facing camera
+            if (currentFacingMode === 'user' && !deviceId) { // Simple check, ideally check track settings
+                videoElement.style.transform = 'scaleX(-1)';
+            } else {
+                // For environment or specific device ID we might not want mirror, but let's check
+                // For now, toggle transform based on simple logic or just keep mirror for everything?
+                // Typically back camera is NOT mirrored.
+                const track = currentStream.getVideoTracks()[0];
+                const settings = track.getSettings();
+                // If we switched to specific device, we should try to detect if it's user facing
+                // or just rely on the toggle logic.
+                // Let's rely on currentFacingMode logic for simple toggle relative to 'user' vs 'environment'
+                videoElement.style.transform = currentFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+            }
 
             videoElement.onloadedmetadata = () => {
                 loadingSpinner.classList.add('hidden');
                 videoElement.play();
                 statusIndicator.classList.add('active');
                 updateToggleButtonState(true);
+                // Re-enumerate to ensure we have all devices with labels after permission
+                getVideoDevices();
             };
 
         } catch (err) {
@@ -68,6 +111,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function switchCamera() {
+        if (videoDevices.length < 2) {
+            alert("No other camera detected.");
+            return;
+        }
+
+        // Toggle logic: simplest is swapping facingMode preference if we don't have IDs or just iterating IDs
+        // If we have devices list, let's iterate them
+        /*
+        currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
+        const nextDevice = videoDevices[currentDeviceIndex];
+        currentFacingMode = 'custom'; // Override
+        await startCamera(nextDevice.deviceId);
+        */
+
+        // Better approach for general toggle often requested: Front <-> Back
+        // If standard toggle, just swap facingMode
+        currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+
+        // However, specific device selection is more robust on desktop
+        if (videoDevices.length > 0) {
+            currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
+            await startCamera(videoDevices[currentDeviceIndex].deviceId);
+            // Try to infer facing mode for mirroring
+            const label = videoDevices[currentDeviceIndex].label.toLowerCase();
+            if (label.includes('back') || label.includes('environment')) {
+                currentFacingMode = 'environment';
+                videoElement.style.transform = 'scaleX(1)';
+            } else {
+                currentFacingMode = 'user';
+                videoElement.style.transform = 'scaleX(-1)';
+            }
+        } else {
+            await startCamera();
+        }
+    }
+
     toggleBtn.addEventListener('click', () => {
         if (isCameraOn) {
             stopCamera();
@@ -76,8 +156,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Initial start
-    startCamera();
+    switchBtn.addEventListener('click', switchCamera);
+
+    // Initial setup
+    getVideoDevices().then(() => {
+        startCamera();
+    });
 
     // Retry button handler
     retryBtn.addEventListener('click', startCamera);
