@@ -41,7 +41,7 @@ class VisionAidApp {
         // Camera controls
         this.currentStream = null;
         this.isCameraOn = true;
-        this.currentFacingMode = 'user';
+        this.currentFacingMode = 'environment'; // Use back camera for mobile
         this.videoDevices = [];
         this.currentDeviceIndex = 0;
         this.toggleBtn = document.getElementById('toggle-camera-btn');
@@ -297,6 +297,11 @@ class VisionAidApp {
     // ========== Camera Control Methods ==========
 
     setupCameraControls() {
+        // Hide camera switch button (only using back camera)
+        if (this.switchBtn) {
+            this.switchBtn.style.display = 'none';
+        }
+
         this.toggleBtn.addEventListener('click', () => {
             if (this.isCameraOn) {
                 this.stopCamera();
@@ -307,7 +312,6 @@ class VisionAidApp {
             }
         });
 
-        this.switchBtn.addEventListener('click', () => this.switchCamera());
         this.retryBtn.addEventListener('click', () => this.startCamera());
 
         window.addEventListener('beforeunload', () => {
@@ -351,7 +355,8 @@ class VisionAidApp {
             this.currentStream = await navigator.mediaDevices.getUserMedia(constraints);
             this.videoElement.srcObject = this.currentStream;
 
-            this.videoElement.style.transform = this.currentFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+            // No mirroring for back camera
+            this.videoElement.style.transform = 'scaleX(1)';
 
             this.videoElement.onloadedmetadata = () => {
                 this.loadingSpinner.classList.add('hidden');
