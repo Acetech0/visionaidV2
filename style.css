@@ -206,3 +206,132 @@ video {
 .control-btn.off:hover {
     background: rgba(239, 68, 68, 0.3);
 }
+
+/* ========== VisionAid V2 Specific Styles ========== */
+
+/* Zone Indicator */
+.zone-indicator {
+    position: absolute;
+    top: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(8px);
+    padding: 0.75rem 1.5rem;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s ease;
+    z-index: 10;
+}
+
+.zone-icon {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #6b7280;
+    box-shadow: 0 0 8px currentColor;
+    transition: all 0.3s ease;
+}
+
+.zone-text {
+    font-size: 1rem;
+    font-weight: 600;
+    color: white;
+    letter-spacing: 0.05em;
+}
+
+/* Zone States */
+.zone-indicator.zone-danger {
+    border-color: rgba(239, 68, 68, 0.6);
+    background: rgba(127, 29, 29, 0.9);
+    animation: pulse-danger 1s infinite;
+}
+
+.zone-indicator.zone-danger .zone-icon {
+    background: #ef4444;
+    box-shadow: 0 0 12px #ef4444;
+}
+
+.zone-indicator.zone-warning {
+    border-color: rgba(245, 158, 11, 0.6);
+    background: rgba(120, 53, 15, 0.9);
+}
+
+.zone-indicator.zone-warning .zone-icon {
+    background: #f59e0b;
+    box-shadow: 0 0 12px #f59e0b;
+}
+
+.zone-indicator.zone-safe {
+    border-color: rgba(16, 185, 129, 0.6);
+    background: rgba(6, 78, 59, 0.9);
+}
+
+.zone-indicator.zone-safe .zone-icon {
+    background: #10b981;
+    box-shadow: 0 0 12px #10b981;
+}
+
+@keyframes pulse-danger {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+    }
+
+    50% {
+        box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+    }
+}
+
+/* Status Display */
+.status-display {
+    display: flex;
+    gap: 1.5rem;
+    justify-content: center;
+    padding: 0.5rem 0;
+    font-size: 0.875rem;
+}
+
+.status-item {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.status-label {
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 500;
+}
+
+.status-value {
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+}
+
+/* Debug Canvas */
+.depth-canvas {
+    position: absolute;
+    bottom: 1rem;
+    right: 1rem;
+    width: 200px;
+    height: auto;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    z-index: 10;
+    opacity: 0.9;
+}
+
+.depth-canvas.hidden {
+    display: none;
+}
+
+/* Debug Button Active State */
+.control-btn.active {
+    background: rgba(59, 130, 246, 0.3);
+    border-color: rgba(59, 130, 246, 0.5);
+}
