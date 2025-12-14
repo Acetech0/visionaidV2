@@ -13,6 +13,17 @@ document.addEventListener('DOMContentLoaded', () => {
     let videoDevices = [];
     let currentDeviceIndex = 0;
 
+    // Hide VisionAid V2 elements since we're using simple camera mode
+    const zoneIndicator = document.getElementById('zone-indicator');
+    const statusDisplay = document.getElementById('status-display');
+    const depthCanvas = document.getElementById('depth-canvas');
+    const debugToggleBtn = document.getElementById('debug-toggle-btn');
+
+    if (zoneIndicator) zoneIndicator.style.display = 'none';
+    if (statusDisplay) statusDisplay.style.display = 'none';
+    if (depthCanvas) depthCanvas.style.display = 'none';
+    if (debugToggleBtn) debugToggleBtn.style.display = 'none';
+
     async function getVideoDevices() {
         try {
             const devices = await navigator.mediaDevices.enumerateDevices();
