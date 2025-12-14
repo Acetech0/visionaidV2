@@ -117,41 +117,48 @@ class VisionAidApp {
             return;
         }
 
+        // Frame skipping for better FPS - process every 3rd frame
+        if (!this.processFrameCounter) this.processFrameCounter = 0;
+        this.processFrameCounter++;
+        const shouldProcess = this.processFrameCounter % CONFIG.PROCESS_EVERY_N_FRAMES === 0;
+
         const frameStart = performance.now();
 
         try {
-            // Layer 1: Depth estimation
-            const depthResult = await this.depthEngine.estimateDepth(this.videoElement);
+            if (shouldProcess) {
+                // Layer 1: Depth estimation
+                const depthResult = await this.depthEngine.estimateDepth(this.videoElement);
 
-            if (!depthResult.success) {
-                console.warn('[VisionAid] Depth estimation failed:', depthResult.error);
+                if (!depthResult.success) {
+                    console.warn('[VisionAid] Depth estimation failed:', depthResult.error);
+                }
+
+                // Layer 2: Geometry validation
+                const geometryResult = this.geometryValidator.analyze(depthResult.depthMap || {});
+
+                // Layer 3: Motion detection
+                const motionResult = this.motionDetector.detect(this.videoElement);
+
+                // Fusion
+                const fusionResult = this.fusionLogic.fuse(
+                    depthResult,
+                    geometryResult,
+                    motionResult
+                );
+
+                // Audio guidance
+                this.audioGuide.updateGuidance(fusionResult);
+
+                // Update UI
+                this.updateUI(fusionResult, depthResult);
+
+                // Debug visualization
+                if (CONFIG.DEBUG.ENABLED && CONFIG.DEBUG.SHOW_DEPTH_MAP && depthResult.depthMap) {
+                    this.visualizeDepthMap(depthResult.depthMap);
+                }
             }
 
-            // Layer 2: Geometry validation
-            const geometryResult = this.geometryValidator.analyze(depthResult.depthMap || {});
-
-            // Layer 3: Motion detection
-            const motionResult = this.motionDetector.detect(this.videoElement);
-
-            // Fusion
-            const fusionResult = this.fusionLogic.fuse(
-                depthResult,
-                geometryResult,
-                motionResult
-            );
-
-            // Audio guidance
-            this.audioGuide.updateGuidance(fusionResult);
-
-            // Update UI
-            this.updateUI(fusionResult, depthResult);
-
-            // Debug visualization
-            if (CONFIG.DEBUG.ENABLED && CONFIG.DEBUG.SHOW_DEPTH_MAP && depthResult.depthMap) {
-                this.visualizeDepthMap(depthResult.depthMap);
-            }
-
-            // Update FPS
+            // Update FPS (always, even when skipping frames)
             this.updateFPS(frameStart);
 
         } catch (error) {

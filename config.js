@@ -14,11 +14,12 @@ export const CONFIG = {
         NEAR: 1.5         // 0.6m - 1.5m, > 1.5m is CLEAR
     },
 
-    // Fusion logic parameters
-    TEMPORAL_BUFFER_SIZE: 3,        // Reduced from 5 for better performance
+    // Fusion logic parameters - optimized for performance
+    TEMPORAL_BUFFER_SIZE: 2,        // Reduced to 2 for better FPS
     MOTION_THRESHOLD: 0.3,          // Minimum motion magnitude to consider
     DEPTH_SPIKE_THRESHOLD: 0.4,     // Sudden depth change threshold
     DEPTH_STABILITY_THRESHOLD: 0.1, // Max variance for "stable" depth
+    PROCESS_EVERY_N_FRAMES: 3,      // Process every 3rd frame for better FPS
 
     // Audio guidance cooldowns (milliseconds) - speak every 5 seconds
     COOLDOWN: {
