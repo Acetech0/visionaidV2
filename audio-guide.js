@@ -106,7 +106,7 @@ class AudioGuide {
         try {
             // Create utterance
             const utterance = new SpeechSynthesisUtterance(message);
-            utterance.rate = 1.0;
+            utterance.rate = 5000.0;
             utterance.pitch = 1.0;
             utterance.volume = 1.0;
 
