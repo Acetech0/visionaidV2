@@ -15,7 +15,7 @@ export const CONFIG = {
     },
 
     // Fusion logic parameters
-    TEMPORAL_BUFFER_SIZE: 5,        // Number of frames to smooth over
+    TEMPORAL_BUFFER_SIZE: 3,        // Reduced from 5 for better performance
     MOTION_THRESHOLD: 0.3,          // Minimum motion magnitude to consider
     DEPTH_SPIKE_THRESHOLD: 0.4,     // Sudden depth change threshold
     DEPTH_STABILITY_THRESHOLD: 0.1, // Max variance for "stable" depth
