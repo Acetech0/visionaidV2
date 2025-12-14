@@ -41,11 +41,7 @@ class VisionAidApp {
         // Camera controls
         this.currentStream = null;
         this.isCameraOn = true;
-        this.currentFacingMode = 'environment'; // Use back camera for mobile
-        this.videoDevices = [];
-        this.currentDeviceIndex = 0;
         this.toggleBtn = document.getElementById('toggle-camera-btn');
-        this.switchBtn = document.getElementById('switch-camera-btn');
         this.retryBtn = document.getElementById('retry-btn');
         this.loadingSpinner = document.getElementById('loading-spinner');
         this.errorMessage = document.getElementById('camera-error');
@@ -80,8 +76,7 @@ class VisionAidApp {
             // Set up debug toggle
             this.debugToggleBtn.addEventListener('click', () => this.toggleDebug());
 
-            // Start camera
-            await this.getVideoDevices();
+            // Start camera (back camera only)
             await this.startCamera();
 
             // Initialize depth engine
@@ -297,11 +292,6 @@ class VisionAidApp {
     // ========== Camera Control Methods ==========
 
     setupCameraControls() {
-        // Hide camera switch button (only using back camera)
-        if (this.switchBtn) {
-            this.switchBtn.style.display = 'none';
-        }
-
         this.toggleBtn.addEventListener('click', () => {
             if (this.isCameraOn) {
                 this.stopCamera();
@@ -319,17 +309,7 @@ class VisionAidApp {
         });
     }
 
-    async getVideoDevices() {
-        try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            this.videoDevices = devices.filter(device => device.kind === 'videoinput');
-            this.switchBtn.style.display = 'flex';
-        } catch (err) {
-            console.error("Error enumerating devices:", err);
-        }
-    }
-
-    async startCamera(deviceId = null) {
+    async startCamera() {
         try {
             if (this.currentStream) {
                 this.currentStream.getTracks().forEach(track => track.stop());
@@ -338,24 +318,18 @@ class VisionAidApp {
             this.errorMessage.classList.add('hidden');
             this.loadingSpinner.classList.remove('hidden');
 
+            // Always use back camera for obstacle detection
             const constraints = {
                 video: {
+                    facingMode: 'environment',
                     width: { ideal: 1920 },
                     height: { ideal: 1080 }
                 },
                 audio: false
             };
 
-            if (deviceId) {
-                constraints.video.deviceId = { exact: deviceId };
-            } else {
-                constraints.video.facingMode = this.currentFacingMode;
-            }
-
             this.currentStream = await navigator.mediaDevices.getUserMedia(constraints);
             this.videoElement.srcObject = this.currentStream;
-
-            // No mirroring for back camera
             this.videoElement.style.transform = 'scaleX(1)';
 
             this.videoElement.onloadedmetadata = () => {
@@ -363,7 +337,6 @@ class VisionAidApp {
                 this.videoElement.play();
                 this.statusIndicator.classList.add('active');
                 this.updateToggleButtonState(true);
-                this.getVideoDevices();
             };
 
         } catch (err) {
@@ -395,31 +368,6 @@ class VisionAidApp {
             this.toggleBtn.classList.remove('active');
             this.toggleBtn.classList.add('off');
             this.toggleBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M21 21l-2-2m-3.268-3.268L6 6"></path><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path></svg>`;
-        }
-    }
-
-    async switchCamera() {
-        if (this.videoDevices.length < 2) {
-            alert("No other camera detected.");
-            return;
-        }
-
-        this.currentFacingMode = this.currentFacingMode === 'user' ? 'environment' : 'user';
-
-        if (this.videoDevices.length > 0) {
-            this.currentDeviceIndex = (this.currentDeviceIndex + 1) % this.videoDevices.length;
-            await this.startCamera(this.videoDevices[this.currentDeviceIndex].deviceId);
-
-            const label = this.videoDevices[this.currentDeviceIndex].label.toLowerCase();
-            if (label.includes('back') || label.includes('environment')) {
-                this.currentFacingMode = 'environment';
-                this.videoElement.style.transform = 'scaleX(1)';
-            } else {
-                this.currentFacingMode = 'user';
-                this.videoElement.style.transform = 'scaleX(-1)';
-            }
-        } else {
-            await this.startCamera();
         }
     }
 }
