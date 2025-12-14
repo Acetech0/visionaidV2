@@ -20,12 +20,12 @@ export const CONFIG = {
     DEPTH_SPIKE_THRESHOLD: 0.4,     // Sudden depth change threshold
     DEPTH_STABILITY_THRESHOLD: 0.1, // Max variance for "stable" depth
 
-    // Audio guidance cooldowns (milliseconds) - speak every 1 second
+    // Audio guidance cooldowns (milliseconds) - speak every 5 seconds
     COOLDOWN: {
-        VERY_CLOSE: 2000,   // 1 second
-        NEAR: 2000,         // 1 second
-        CLEAR: 2000,        // 1 second
-        UNCERTAIN: 2000     // 1 second
+        VERY_CLOSE: 5000,   // 5 seconds
+        NEAR: 5000,         // 5 seconds
+        CLEAR: 5000,        // 5 seconds
+        UNCERTAIN: 5000     // 5 seconds
     },
 
     // Model configuration
@@ -40,7 +40,7 @@ export const CONFIG = {
     VIDEO: {
         CENTRAL_REGION_WIDTH: 0.4,   // 40% of frame width (central corridor)
         CENTRAL_REGION_HEIGHT: 0.6,  // 60% of frame height
-        FLOOR_REGION_BOTTOM: 0.8     // Bottom 20% is likely floor
+        FLOOR_REGION_BOTTOM: 0.7     // Bottom 20% is likely floor
     },
 
     // Debug mode
