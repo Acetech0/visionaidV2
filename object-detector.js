@@ -77,4 +77,20 @@ export default class ObjectDetector {
         const last = strings.pop();
         return `${strings.join(', ')} and ${last}`;
     }
+
+    /**
+     * Estimate rough distance based on bounding box height relative to frame
+     * @param {Array} bbox - [x, y, width, height]
+     * @param {Number} frameHeight - Height of the video frame
+     * @returns {String} "Very Close", "Near", or "Safe"
+     */
+    estimateDistance(bbox, frameHeight) {
+        const [, , , height] = bbox;
+        const ratio = height / frameHeight;
+
+        if (ratio > 0.75) return 'Very Close'; // Filling >75% of height
+        if (ratio > 0.4) return 'Near';        // Filling >40% of height
+        return 'Safe';
+    }
+}
 }

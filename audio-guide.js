@@ -91,9 +91,10 @@ class AudioGuide {
     speak(message, priority = 'normal', zone = null) {
         if (!this.isInitialized || !this.synthesis) return;
 
-        // Don't queue new messages if already speaking (unless critical)
-        if (this.isSpeaking && priority !== 'critical') {
-            return;
+        // Navigation and Critical messages always speak
+        if ((priority === 'navigation' || priority === 'critical') && this.isSpeaking) {
+            this.synthesis.cancel(); // Interrupt current speech
+            this.isSpeaking = false;
         }
 
         // Check cooldown
@@ -159,7 +160,8 @@ class AudioGuide {
      */
     canSpeak(zone, priority) {
         // Critical messages always allowed
-        if (priority === 'critical') {
+        // Critical and Navigation messages always allowed
+        if (priority === 'critical' || priority === 'navigation') {
             return true;
         }
 

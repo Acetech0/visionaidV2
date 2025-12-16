@@ -9,6 +9,7 @@ import MotionDetector from './motion-detector.js';
 import FusionLogic from './fusion-logic.js';
 import AudioGuide from './audio-guide.js';
 import ObjectDetector from './object-detector.js';
+import NavigationAssistant from './navigation-assistant.js';
 import { CONFIG, ZONE_LABELS } from './config.js';
 
 class VisionAidApp {
@@ -20,6 +21,7 @@ class VisionAidApp {
         this.fusionLogic = new FusionLogic();
         this.audioGuide = new AudioGuide();
         this.objectDetector = new ObjectDetector();
+        this.navAssistant = new NavigationAssistant();
 
         // UI elements
         this.videoElement = document.getElementById('camera-feed');
@@ -160,8 +162,19 @@ class VisionAidApp {
                 const detections = await this.objectDetector.detect(this.videoElement);
                 this.drawDetections(detections);
 
-                // Optional: Announce objects occasionally
-                // This logic could be moved to AudioGuide
+                // Navigation Assistance
+                const guidance = this.navAssistant.evaluate(
+                    detections,
+                    this.videoElement.videoWidth,
+                    this.videoElement.videoHeight
+                );
+
+                if (guidance) {
+                    console.log('[VisionAid] Guidance:', guidance.message);
+                    // Speak guidance
+                    this.audioGuide.speak(guidance.message, 'navigation');
+                    this.updateSystemStatus(guidance.action);
+                }
             }
 
             // 2. Depth/Distance Processing (Placeholder for existing logic)
