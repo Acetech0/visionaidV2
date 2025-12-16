@@ -56,16 +56,23 @@ class VisionAidApp {
      */
     async init() {
         console.log('[VisionAid] Initializing...');
-        this.updateSystemStatus('Initializing...');
-
-        // Show VisionAid V2 elements
-        if (this.zoneIndicator) this.zoneIndicator.style.display = 'flex';
-        // Check availability of statusDisplay before accessing
-        if (this.systemStatus && this.systemStatus.parentElement) {
-            this.systemStatus.parentElement.parentElement.style.display = 'flex';
-        }
 
         try {
+            console.log('[VisionAid] Step 0: Setting up UI elements...');
+            this.updateSystemStatus('Initializing...');
+
+            // Show VisionAid V2 elements
+            if (this.zoneIndicator) {
+                this.zoneIndicator.style.display = 'flex';
+                console.log('[VisionAid] Zone indicator shown');
+            }
+
+            // Check availability of statusDisplay before accessing
+            if (this.systemStatus && this.systemStatus.parentElement) {
+                this.systemStatus.parentElement.parentElement.style.display = 'flex';
+                console.log('[VisionAid] Status display shown');
+            }
+
             console.log('[VisionAid] Step 1: Initializing audio guide...');
             // Initialize audio guide
             const audioResult = this.audioGuide.init();
@@ -112,6 +119,7 @@ class VisionAidApp {
 
         } catch (error) {
             console.error('[VisionAid] Initialization failed:', error);
+            console.error('[VisionAid] Error stack:', error.stack);
             this.updateSystemStatus('Error: ' + error.message);
             this.audioGuide.speakSystem('CAMERA_ERROR');
         }
@@ -228,27 +236,22 @@ class VisionAidApp {
             this.toggleBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M21 21l-2-2m-3.268-3.268L6 6"></path><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path></svg>`;
         }
     }
+
+    updateSystemStatus(status) {
+        if (this.systemStatus) {
+            this.systemStatus.textContent = status;
+        }
+    }
+
+    updateAudioStatus(status) {
+        if (this.audioStatus) {
+            this.audioStatus.textContent = status;
+        }
+    }
 }
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     const app = new VisionAidApp();
-
-    const permissionOverlay = document.getElementById('permission-overlay');
-    const grantPermissionBtn = document.getElementById('grant-permission-btn');
-
-    if (!permissionOverlay || !grantPermissionBtn) {
-        console.error('[VisionAid] Permission overlay elements not found on DOMContentLoaded!');
-        return;
-    }
-
-    console.log('[VisionAid] DOM ready, setting up permission button listener...');
-
-    grantPermissionBtn.addEventListener('click', async () => {
-        console.log('[VisionAid] Permission button clicked by user.');
-        permissionOverlay.classList.add('hidden');
-        await app.init(); // Call init now after user clicks
-    }, { once: true });
-
-    console.log('[VisionAid] Permission button listener attached. Waiting for user to click...');
+    app.init();
 });
