@@ -67,30 +67,41 @@ class VisionAidApp {
         }
 
         try {
-            // ... (rest of init)
+            console.log('[VisionAid] Step 1: Initializing audio guide...');
             // Initialize audio guide
             const audioResult = this.audioGuide.init();
             if (audioResult.success) {
                 this.audioGuide.speakSystem('MODEL_LOADING');
                 this.updateAudioStatus('Ready');
+                console.log('[VisionAid] Audio guide initialized successfully');
             } else {
                 this.updateAudioStatus('Unavailable');
+                console.warn('[VisionAid] Audio guide unavailable');
             }
 
+            console.log('[VisionAid] Step 2: Setting up camera controls...');
             // Set up camera controls
             this.setupCameraControls();
+            console.log('[VisionAid] Camera controls set up');
 
+            console.log('[VisionAid] Step 3: Starting camera...');
             // Start camera
             await this.startCamera();
+            console.log('[VisionAid] Camera started successfully');
 
+            console.log('[VisionAid] Step 4: Initializing depth engine...');
             // Initialize depth engine
             this.updateSystemStatus('Loading AI model...');
             const depthResult = await this.depthEngine.init();
+            console.log('[VisionAid] Depth engine init result:', depthResult);
 
             if (!depthResult.success) {
+                console.error('[VisionAid] Depth engine failed to initialize');
                 throw new Error('Failed to initialize depth engine');
             }
+            console.log('[VisionAid] Depth engine initialized successfully');
 
+            console.log('[VisionAid] Step 5: Finalizing initialization...');
             this.updateSystemStatus('Ready');
             this.audioGuide.speakSystem('SYSTEM_READY');
 
@@ -98,7 +109,7 @@ class VisionAidApp {
             this.isRunning = true;
             this.processFrame();
 
-            console.log('[VisionAid] Initialization complete');
+            console.log('[VisionAid] ✓ Initialization complete - System ready');
 
         } catch (error) {
             console.error('[VisionAid] Initialization failed:', error);
@@ -146,13 +157,16 @@ class VisionAidApp {
     }
 
     async startCamera() {
+        console.log('[Camera] Starting camera initialization...');
         try {
             if (this.currentStream) {
+                console.log('[Camera] Stopping existing stream...');
                 this.currentStream.getTracks().forEach(track => track.stop());
             }
 
             this.errorMessage.classList.add('hidden');
             this.loadingSpinner.classList.remove('hidden');
+            console.log('[Camera] UI updated - showing spinner');
 
             const constraints = {
                 video: {
@@ -162,22 +176,30 @@ class VisionAidApp {
                 },
                 audio: false
             };
+            console.log('[Camera] Requesting camera with constraints:', constraints);
 
             this.currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+            console.log('[Camera] ✓ Camera stream obtained successfully');
+
             this.videoElement.srcObject = this.currentStream;
 
             // Mirror only if using front camera (user)
             this.videoElement.style.transform = this.facingMode === 'user' ? 'scaleX(-1)' : 'none';
+            console.log('[Camera] Video element configured, waiting for metadata...');
 
             this.videoElement.onloadedmetadata = () => {
+                console.log('[Camera] ✓ Video metadata loaded');
                 this.loadingSpinner.classList.add('hidden');
                 this.videoElement.play();
                 this.statusIndicator.classList.add('active');
                 this.updateToggleButtonState(true);
+                console.log('[Camera] ✓ Camera fully initialized and playing');
             };
 
         } catch (err) {
-            console.error("Error accessing camera:", err);
+            console.error("[Camera] Error accessing camera:", err);
+            console.error("[Camera] Error name:", err.name);
+            console.error("[Camera] Error message:", err.message);
             this.loadingSpinner.classList.add('hidden');
             this.errorMessage.classList.remove('hidden');
             this.statusIndicator.classList.remove('active');
