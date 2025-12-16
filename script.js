@@ -65,21 +65,6 @@ class VisionAidApp {
             this.systemStatus.parentElement.parentElement.style.display = 'flex';
         }
 
-        // Show permission overlay and wait for user to grant access
-        const permissionOverlay = document.getElementById('permission-overlay');
-        const grantPermissionBtn = document.getElementById('grant-permission-btn');
-
-        console.log('[VisionAid] Waiting for camera permission...');
-
-        // Wait for user to click the permission button
-        await new Promise((resolve) => {
-            grantPermissionBtn.addEventListener('click', () => {
-                console.log('[VisionAid] User clicked grant permission');
-                permissionOverlay.classList.add('hidden');
-                resolve();
-            }, { once: true });
-        });
-
         try {
             console.log('[VisionAid] Step 1: Initializing audio guide...');
             // Initialize audio guide
@@ -248,5 +233,22 @@ class VisionAidApp {
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     const app = new VisionAidApp();
-    app.init();
+
+    const permissionOverlay = document.getElementById('permission-overlay');
+    const grantPermissionBtn = document.getElementById('grant-permission-btn');
+
+    if (!permissionOverlay || !grantPermissionBtn) {
+        console.error('[VisionAid] Permission overlay elements not found on DOMContentLoaded!');
+        return;
+    }
+
+    console.log('[VisionAid] DOM ready, setting up permission button listener...');
+
+    grantPermissionBtn.addEventListener('click', async () => {
+        console.log('[VisionAid] Permission button clicked by user.');
+        permissionOverlay.classList.add('hidden');
+        await app.init(); // Call init now after user clicks
+    }, { once: true });
+
+    console.log('[VisionAid] Permission button listener attached. Waiting for user to click...');
 });
