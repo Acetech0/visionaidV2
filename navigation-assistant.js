@@ -95,6 +95,9 @@ export default class NavigationAssistant {
         let distStr = distanceMeters > 0 ? `in ${distanceMeters.toFixed(1)} meter` : 'nearby';
         let moveStr = '';
 
+        let action = '';
+        let message = '';
+
         if (relativeX < 0.33) {
             action = 'Object Left';
             moveStr = 'move right'; // Suggest dodging away
