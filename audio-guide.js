@@ -27,12 +27,32 @@ class AudioGuide {
         if ('speechSynthesis' in window) {
             this.synthesis = window.speechSynthesis;
             this.isInitialized = true;
+
+            // Chrome loads voices asynchronously
+            if (this.synthesis.onvoiceschanged !== undefined) {
+                this.synthesis.onvoiceschanged = () => {
+                    console.log('[AudioGuide] Voices loaded:', this.synthesis.getVoices().length);
+                };
+            }
+
             console.log('[AudioGuide] TTS initialized');
             return { success: true };
         } else {
             console.error('[AudioGuide] TTS not supported');
             return { success: false, error: 'TTS not supported' };
         }
+    }
+
+    /**
+     * Unlock audio context (browser autoplay policy)
+     * Must be called from a user interaction (click/touch)
+     */
+    unlock() {
+        if (!this.synthesis) return;
+        // Speak empty string to resume audio context if suspended
+        const utterance = new SpeechSynthesisUtterance('');
+        this.synthesis.speak(utterance);
+        this.synthesis.resume(); // Ensure resume
     }
 
     /**
@@ -97,9 +117,6 @@ class AudioGuide {
     /**
      * Speak a message with priority and cooldown management
      */
-    /**
-     * Speak a message with priority and cooldown management
-     */
     speak(message, priority = 'normal', zone = null) {
         if (!this.isInitialized || !this.synthesis) return;
 
@@ -114,14 +131,12 @@ class AudioGuide {
 
         // Constraint 1: Do not interrupt if already speaking (unless critical emergency)
         if (this.isSpeaking && priority !== 'critical') {
-            // console.log('[AudioGuide] Blocked: Already speaking');
             return;
         }
 
         // Constraint 2: "wait 2 sec before speaking again"
         // Wait 2000ms after the LAST speech ended
         if (now - this.lastSpeechEnd < 2000 && priority !== 'critical') {
-            // console.log('[AudioGuide] Blocked: In 2s cooldown');
             return;
         }
 
@@ -147,7 +162,12 @@ class AudioGuide {
             utterance.volume = 1.0;
 
             // Set voice (prefer female voice for calmness)
-            const voices = this.synthesis.getVoices();
+            let voices = this.synthesis.getVoices();
+            // Retry getting voices if empty (sometimes needed)
+            if (voices.length === 0) {
+                voices = window.speechSynthesis.getVoices();
+            }
+
             if (voices.length > 0) {
                 const preferredVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Female'));
                 if (preferredVoice) {

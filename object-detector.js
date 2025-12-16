@@ -84,13 +84,6 @@ export default class ObjectDetector {
      * @param {Number} frameHeight - Height of the video frame
      * @returns {String} "Very Close", "Near", or "Safe"
      */
-    estimateDistance(bbox, frameHeight) {
-        const [, , , height] = bbox;
-        const ratio = height / frameHeight;
 
-        if (ratio > 0.75) return 'Very Close'; // Filling >75% of height
-        if (ratio > 0.4) return 'Near';        // Filling >40% of height
-        return 'Safe';
-    }
 }
 

@@ -22,7 +22,6 @@ export default class NavigationAssistant {
 
         const now = Date.now();
         if (now - this.lastGuidanceTime < this.guidanceCooldown) {
-            // console.log('[NavAssistant] Guidance cooldown active');
             return null;
         }
 
@@ -86,9 +85,7 @@ export default class NavigationAssistant {
 
         // Only guide if object is significant (now strictly based on zones)
         if (distanceCategory === 'Safe' || distanceCategory === 'Clear') {
-            // Maybe announce 'Clear' if previously close? 
-            // For now, only dodge if Very Close or Near
-            // console.log(`[NavAssistant] Object ${criticalObj.class} is ${distanceCategory} (${distanceMeters.toFixed(1)}m) - No action`);
+            // Only announce if dangerous
             return null;
         }
 

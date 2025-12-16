@@ -186,21 +186,12 @@ class VisionAidApp {
                 );
 
                 if (guidance) {
-                    console.log('[VisionAid] Guidance generated:', guidance.message);
+                    console.log('[VisionAid] Guidance:', guidance.message);
                     // Speak guidance
                     this.audioGuide.speak(guidance.message, 'navigation');
                     this.updateSystemStatus(guidance.action);
-                } else if (this.frameCount % 60 === 0) {
-                    // Log periodically why no guidance
-                    // console.log('[VisionAid] No guidance generated this frame');
                 }
-            } else if (this.frameCount % 60 === 0) {
-                console.log('[VisionAid] No detections or detector not loaded');
             }
-
-            // 2. Depth/Distance Processing (Placeholder for existing logic)
-            // (Assumed mostly handled by DepthEngine/FusionLogic in original code, but since code is missing, 
-            // I'll leave a hook here. The original 'processFrame' likely coordinated these.)
 
             // Update FPS
             this.frameCount++;
@@ -301,6 +292,7 @@ class VisionAidApp {
     }
 
     async startCamera() {
+        this.audioGuide.unlock(); // User interaction unlocks audio
         console.log('[Camera] Starting camera initialization...');
         try {
             if (this.currentStream) {
