@@ -13,7 +13,9 @@ class AudioGuide {
         this.messageQueue = [];
         this.lastMessageTime = {};
         this.currentZone = ZONE_LABELS.UNKNOWN;
+        this.currentZone = ZONE_LABELS.UNKNOWN;
         this.lastSpokenZone = ZONE_LABELS.UNKNOWN;
+        this.lastSpeechEnd = 0;
     }
 
     /**
@@ -88,19 +90,31 @@ class AudioGuide {
      * @param {string} priority - 'critical', 'high', 'normal', 'low'
      * @param {string} zone - Associated zone for cooldown tracking
      */
+
+
+    /**
+     * Speak a message with priority and cooldown management
+     */
     speak(message, priority = 'normal', zone = null) {
         if (!this.isInitialized || !this.synthesis) return;
 
-        // Navigation and Critical messages always speak
-        if ((priority === 'navigation' || priority === 'critical') && this.isSpeaking) {
-            this.synthesis.cancel(); // Interrupt current speech
-            this.isSpeaking = false;
+        // Constraint 1: Do not interrupt if already speaking (unless critical emergency)
+        // User requested: "let it complete it first"
+        if (this.isSpeaking && priority !== 'critical') {
+            return;
+        }
+
+        // Constraint 2: "wait 2 sec before speaking again"
+        const now = Date.now();
+        if (now - this.lastSpeechEnd < 2000 && priority !== 'critical') {
+            return;
         }
 
         // Check cooldown
         if (zone && !this.canSpeak(zone, priority)) {
             return;
         }
+
 
         // Critical messages interrupt everything
         if (priority === 'critical') {
@@ -125,14 +139,12 @@ class AudioGuide {
 
             // Event handlers
             utterance.onstart = () => {
-                this.isSpeaking = true;
-                if (CONFIG.DEBUG.LOG_DETECTIONS) {
-                    console.log(`[AudioGuide] Speaking: "${message}" (${priority})`);
-                }
+                // this.isSpeaking = true; // Wait for onend to clear it
             };
 
             utterance.onend = () => {
                 this.isSpeaking = false;
+                this.lastSpeechEnd = Date.now();
                 if (zone) {
                     this.lastMessageTime[zone] = Date.now();
                     this.lastSpokenZone = zone;
@@ -146,6 +158,7 @@ class AudioGuide {
                     this.lastMessageTime[zone] = Date.now();
                 }
             };
+
 
             // Speak
             this.synthesis.speak(utterance);

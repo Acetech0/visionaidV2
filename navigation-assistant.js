@@ -89,26 +89,35 @@ export default class NavigationAssistant {
         }
 
         // 4. Formulate Guidance
-        let message = '';
-        let action = '';
+        // User Format: "person ahead in x meter , move right"
+
+        let distStr = distanceMeters > 0 ? `in ${distanceMeters.toFixed(1)} meter` : 'nearby';
+        let moveStr = '';
 
         if (relativeX < 0.33) {
-            // Object is on Left
             action = 'Object Left';
-            message = `${criticalObj.class} on Left.`;
+            moveStr = 'move right'; // Suggest dodging away
         } else if (relativeX > 0.66) {
-            // Object is on Right
             action = 'Object Right';
-            message = `${criticalObj.class} on Right.`;
+            moveStr = 'move left';
         } else {
-            // Object is Center - Collision Hazard!
             action = 'Dodge';
-            message = `${criticalObj.class} Ahead. Move Right.`;
+            moveStr = 'move right'; // Default dodge
         }
 
-        // Append distance to message if available
-        if (distanceMeters > 0) {
-            message += ` ${distanceMeters.toFixed(1)} meters.`;
+        // Construct natural sentence
+        // e.g. "person ahead in 2.5 meter, move right"
+        // Note: For objects on left/right, we might not say "ahead"? 
+        // But user asked for "person ahead...". Let's stick to their template if possible, 
+        // but if it's on the left, maybe "person on left, move right"?
+
+        if (action === 'Dodge') {
+            // Center
+            message = `${criticalObj.class} ahead ${distStr}, ${moveStr}.`;
+        } else {
+            // Side
+            let side = relativeX < 0.33 ? 'on left' : 'on right';
+            message = `${criticalObj.class} ${side} ${distStr}, ${moveStr}.`;
         }
 
         this.lastGuidanceTime = now;
