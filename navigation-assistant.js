@@ -1,6 +1,7 @@
+/**
  * Navigation Assistant
-    * Analyzes object positions to provide dodge / avoidance guidance
-        */
+ * Analyzes object positions to provide dodge/avoidance guidance
+ */
 import { CONFIG } from './config.js';
 
 export default class NavigationAssistant {
