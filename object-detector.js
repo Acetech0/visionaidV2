@@ -93,4 +93,4 @@ export default class ObjectDetector {
         return 'Safe';
     }
 }
-}
+
