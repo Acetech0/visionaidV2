@@ -139,7 +139,10 @@ class AudioGuide {
 
             // Event handlers
             utterance.onstart = () => {
-                // this.isSpeaking = true; // Wait for onend to clear it
+                // Logging if needed
+                if (CONFIG.DEBUG.LOG_DETECTIONS) {
+                    console.log(`[AudioGuide] Speaking: "${message}"`);
+                }
             };
 
             utterance.onend = () => {
@@ -152,7 +155,6 @@ class AudioGuide {
             };
 
             utterance.onerror = (event) => {
-                // Silently handle errors to avoid console spam
                 this.isSpeaking = false;
                 if (zone) {
                     this.lastMessageTime[zone] = Date.now();
@@ -161,6 +163,7 @@ class AudioGuide {
 
 
             // Speak
+            this.isSpeaking = true; // Lock immediately to prevent queue flooding
             this.synthesis.speak(utterance);
         } catch (error) {
             console.warn('[AudioGuide] Speech failed:', error.message);
