@@ -65,6 +65,21 @@ class VisionAidApp {
             this.systemStatus.parentElement.parentElement.style.display = 'flex';
         }
 
+        // Show permission overlay and wait for user to grant access
+        const permissionOverlay = document.getElementById('permission-overlay');
+        const grantPermissionBtn = document.getElementById('grant-permission-btn');
+
+        console.log('[VisionAid] Waiting for camera permission...');
+
+        // Wait for user to click the permission button
+        await new Promise((resolve) => {
+            grantPermissionBtn.addEventListener('click', () => {
+                console.log('[VisionAid] User clicked grant permission');
+                permissionOverlay.classList.add('hidden');
+                resolve();
+            }, { once: true });
+        });
+
         try {
             console.log('[VisionAid] Step 1: Initializing audio guide...');
             // Initialize audio guide
