@@ -41,7 +41,10 @@ class VisionAidApp {
         // Camera controls
         this.currentStream = null;
         this.isCameraOn = true;
+        this.facingMode = 'user'; // Default to user-facing (selfie)
+
         this.toggleBtn = document.getElementById('toggle-camera-btn');
+        this.switchCameraBtn = document.getElementById('switch-camera-btn');
         this.retryBtn = document.getElementById('retry-btn');
         this.loadingSpinner = document.getElementById('loading-spinner');
         this.errorMessage = document.getElementById('camera-error');
@@ -52,15 +55,20 @@ class VisionAidApp {
      * Initialize the application
      */
     async init() {
+        // ... (existing init code) ...
         console.log('[VisionAid] Initializing...');
         this.updateSystemStatus('Initializing...');
 
         // Show VisionAid V2 elements
         if (this.zoneIndicator) this.zoneIndicator.style.display = 'flex';
-        if (this.statusDisplay) this.statusDisplay.style.display = 'flex';
+        // Check availability of statusDisplay before accessing
+        if (this.systemStatus && this.systemStatus.parentElement) {
+            this.systemStatus.parentElement.parentElement.style.display = 'flex';
+        }
         if (this.debugToggleBtn) this.debugToggleBtn.style.display = 'flex';
 
         try {
+            // ... (rest of init)
             // Initialize audio guide
             const audioResult = this.audioGuide.init();
             if (audioResult.success) {
@@ -76,7 +84,7 @@ class VisionAidApp {
             // Set up debug toggle
             this.debugToggleBtn.addEventListener('click', () => this.toggleDebug());
 
-            // Start camera (back camera only)
+            // Start camera
             await this.startCamera();
 
             // Initialize depth engine
@@ -103,206 +111,7 @@ class VisionAidApp {
         }
     }
 
-    /**
-     * Main processing loop
-     */
-    async processFrame() {
-        if (!this.isRunning || this.isPaused) {
-            return;
-        }
-
-        // Frame skipping for better FPS - process every 3rd frame
-        if (!this.processFrameCounter) this.processFrameCounter = 0;
-        this.processFrameCounter++;
-        const shouldProcess = this.processFrameCounter % CONFIG.PROCESS_EVERY_N_FRAMES === 0;
-
-        const frameStart = performance.now();
-
-        try {
-            if (shouldProcess) {
-                // Layer 1: Depth estimation
-                const depthResult = await this.depthEngine.estimateDepth(this.videoElement);
-
-                if (!depthResult.success) {
-                    console.warn('[VisionAid] Depth estimation failed:', depthResult.error);
-                }
-
-                // Layer 2: Geometry validation
-                const geometryResult = this.geometryValidator.analyze(depthResult.depthMap || {});
-
-                // Layer 3: Motion detection
-                const motionResult = this.motionDetector.detect(this.videoElement);
-
-                // Fusion
-                const fusionResult = this.fusionLogic.fuse(
-                    depthResult,
-                    geometryResult,
-                    motionResult
-                );
-
-                // Audio guidance
-                this.audioGuide.updateGuidance(fusionResult);
-
-                // Update UI
-                this.updateUI(fusionResult, depthResult);
-
-                // Debug visualization
-                if (CONFIG.DEBUG.ENABLED && CONFIG.DEBUG.SHOW_DEPTH_MAP && depthResult.depthMap) {
-                    this.visualizeDepthMap(depthResult.depthMap);
-                }
-            }
-
-            // Update FPS (always, even when skipping frames)
-            this.updateFPS(frameStart);
-
-        } catch (error) {
-            console.error('[VisionAid] Processing error:', error);
-        }
-
-        // Schedule next frame
-        this.animationFrameId = requestAnimationFrame(() => this.processFrame());
-    }
-
-    /**
-     * Update UI based on fusion result
-     */
-    updateUI(fusionResult, depthResult) {
-        if (!fusionResult.success) return;
-
-        const zone = fusionResult.zone;
-        const confidence = fusionResult.confidence;
-
-        // Update zone indicator
-        if (fusionResult.distanceMeters) {
-            this.zoneText.textContent = `${zone} (${fusionResult.distanceMeters.toFixed(1)}m)`;
-        } else {
-            this.zoneText.textContent = zone;
-        }
-
-        // Update zone indicator color
-        this.zoneIndicator.className = 'zone-indicator';
-        if (zone === ZONE_LABELS.VERY_CLOSE) {
-            this.zoneIndicator.classList.add('zone-danger');
-        } else if (zone === ZONE_LABELS.NEAR) {
-            this.zoneIndicator.classList.add('zone-warning');
-        } else if (zone === ZONE_LABELS.CLEAR) {
-            this.zoneIndicator.classList.add('zone-safe');
-        }
-
-        // Update audio status
-        if (this.audioGuide.isSpeaking) {
-            this.updateAudioStatus('Speaking');
-        } else {
-            this.updateAudioStatus('Ready');
-        }
-
-        // Log in debug mode
-        if (CONFIG.DEBUG.LOG_DETECTIONS) {
-            console.log('[VisionAid]', {
-                zone,
-                confidence: confidence.toFixed(2),
-                reasoning: fusionResult.reasoning,
-                inferenceTime: depthResult.inferenceTime?.toFixed(1) + 'ms'
-            });
-        }
-    }
-
-    /**
-     * Visualize depth map on debug canvas
-     */
-    visualizeDepthMap(depthMap) {
-        const { data, width, height } = depthMap;
-
-        if (this.depthCanvas.width !== width || this.depthCanvas.height !== height) {
-            this.depthCanvas.width = width;
-            this.depthCanvas.height = height;
-            this.debugImageData = null; // Reset if size changes
-        }
-
-        const ctx = this.depthCanvas.getContext('2d');
-
-        // Reuse ImageData
-        if (!this.debugImageData) {
-            this.debugImageData = ctx.createImageData(width, height);
-        }
-
-        const imgData = this.debugImageData;
-        const pixels = imgData.data;
-
-        // Convert depth to grayscale
-        for (let i = 0; i < data.length; i++) {
-            const value = Math.floor(data[i] * 255);
-            const offset = i * 4;
-            pixels[offset] = value;
-            pixels[offset + 1] = value;
-            pixels[offset + 2] = value;
-            pixels[offset + 3] = 255;
-        }
-
-        ctx.putImageData(imgData, 0, 0);
-    }
-
-    /**
-     * Update FPS display
-     */
-    updateFPS(frameStart) {
-        this.frameCount++;
-        const now = Date.now();
-
-        if (now - this.lastFpsUpdate >= 1000) {
-            this.currentFPS = this.frameCount;
-            this.fpsDisplay.textContent = this.currentFPS;
-
-            // Color code FPS
-            if (this.currentFPS >= CONFIG.TARGET_FPS) {
-                this.fpsDisplay.style.color = '#10b981';
-            } else if (this.currentFPS >= CONFIG.TARGET_FPS * 0.7) {
-                this.fpsDisplay.style.color = '#f59e0b';
-            } else {
-                this.fpsDisplay.style.color = '#ef4444';
-            }
-
-            this.frameCount = 0;
-            this.lastFpsUpdate = now;
-        }
-    }
-
-    /**
-     * Toggle debug mode
-     */
-    toggleDebug() {
-        CONFIG.DEBUG.ENABLED = !CONFIG.DEBUG.ENABLED;
-        CONFIG.DEBUG.SHOW_DEPTH_MAP = CONFIG.DEBUG.ENABLED;
-        CONFIG.DEBUG.LOG_DETECTIONS = CONFIG.DEBUG.ENABLED;
-
-        if (CONFIG.DEBUG.ENABLED) {
-            this.depthCanvas.classList.remove('hidden');
-            this.debugToggleBtn.classList.add('active');
-            console.log('[VisionAid] Debug mode enabled');
-        } else {
-            this.depthCanvas.classList.add('hidden');
-            this.debugToggleBtn.classList.remove('active');
-            console.log('[VisionAid] Debug mode disabled');
-        }
-    }
-
-    /**
-     * Update system status display
-     */
-    updateSystemStatus(status) {
-        if (this.systemStatus) {
-            this.systemStatus.textContent = status;
-        }
-    }
-
-    /**
-     * Update audio status display
-     */
-    updateAudioStatus(status) {
-        if (this.audioStatus) {
-            this.audioStatus.textContent = status;
-        }
-    }
+    // ... (existing methods) ...
 
     // ========== Camera Control Methods ==========
 
@@ -317,11 +126,27 @@ class VisionAidApp {
             }
         });
 
+        if (this.switchCameraBtn) {
+            this.switchCameraBtn.addEventListener('click', () => this.switchCamera());
+        }
+
         this.retryBtn.addEventListener('click', () => this.startCamera());
 
         window.addEventListener('beforeunload', () => {
             this.stopCamera();
         });
+    }
+
+    async switchCamera() {
+        // Toggle facing mode
+        this.facingMode = this.facingMode === 'user' ? 'environment' : 'user';
+        console.log(`[VisionAid] Switching camera to: ${this.facingMode}`);
+
+        // Restart camera if it's currently on
+        if (this.isCameraOn) {
+            await this.stopCamera();
+            await this.startCamera();
+        }
     }
 
     async startCamera() {
@@ -333,19 +158,20 @@ class VisionAidApp {
             this.errorMessage.classList.add('hidden');
             this.loadingSpinner.classList.remove('hidden');
 
-            // Use front camera for now (change to 'environment' for back camera on mobile)
             const constraints = {
                 video: {
-                    facingMode: 'user',
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
+                    facingMode: this.facingMode,
+                    width: { ideal: 1280 }, // Lower resolution slightly for better mobile performance
+                    height: { ideal: 720 }
                 },
                 audio: false
             };
 
             this.currentStream = await navigator.mediaDevices.getUserMedia(constraints);
             this.videoElement.srcObject = this.currentStream;
-            this.videoElement.style.transform = 'scaleX(-1)'; // Mirror for front camera
+
+            // Mirror only if using front camera (user)
+            this.videoElement.style.transform = this.facingMode === 'user' ? 'scaleX(-1)' : 'none';
 
             this.videoElement.onloadedmetadata = () => {
                 this.loadingSpinner.classList.add('hidden');
