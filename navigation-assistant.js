@@ -21,7 +21,10 @@ export default class NavigationAssistant {
         if (!detections || detections.length === 0) return null;
 
         const now = Date.now();
-        if (now - this.lastGuidanceTime < this.guidanceCooldown) return null;
+        if (now - this.lastGuidanceTime < this.guidanceCooldown) {
+            // console.log('[NavAssistant] Guidance cooldown active');
+            return null;
+        }
 
         // 1. Find the most critical object (closest/largest)
         // We use bbox area as a proxy for closeness/importance
@@ -85,6 +88,7 @@ export default class NavigationAssistant {
         if (distanceCategory === 'Safe' || distanceCategory === 'Clear') {
             // Maybe announce 'Clear' if previously close? 
             // For now, only dodge if Very Close or Near
+            // console.log(`[NavAssistant] Object ${criticalObj.class} is ${distanceCategory} (${distanceMeters.toFixed(1)}m) - No action`);
             return null;
         }
 

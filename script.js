@@ -186,11 +186,16 @@ class VisionAidApp {
                 );
 
                 if (guidance) {
-                    console.log('[VisionAid] Guidance:', guidance.message);
+                    console.log('[VisionAid] Guidance generated:', guidance.message);
                     // Speak guidance
                     this.audioGuide.speak(guidance.message, 'navigation');
                     this.updateSystemStatus(guidance.action);
+                } else if (this.frameCount % 60 === 0) {
+                    // Log periodically why no guidance
+                    // console.log('[VisionAid] No guidance generated this frame');
                 }
+            } else if (this.frameCount % 60 === 0) {
+                console.log('[VisionAid] No detections or detector not loaded');
             }
 
             // 2. Depth/Distance Processing (Placeholder for existing logic)
