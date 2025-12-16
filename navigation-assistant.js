@@ -70,7 +70,13 @@ export default class NavigationAssistant {
 
         } else {
             // Fallback: Height Ratio
+            // Model: Height 1.0 = ~0.5m, Height 0.1 = ~10m
+            // Simple inverse: meters = 0.5 / heightRatio (tuned)
+            // If height 0.5 (half screen) -> 1m. 
+            // If height 0.1 -> 5m.
             const heightRatio = h / frameHeight;
+            distanceMeters = 0.5 / Math.max(0.01, heightRatio); // Prevent div by zero
+
             if (heightRatio > 0.6) distanceCategory = 'Very Close';
             else if (heightRatio > 0.3) distanceCategory = 'Near';
         }

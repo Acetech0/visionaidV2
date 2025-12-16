@@ -63,7 +63,7 @@ class VisionAidApp {
      * Initialize the application
      */
     async init() {
-        console.log('[VisionAid] Initializing...');
+        console.log('[VisionAid] Initializing... (v2.1 - Distance Update)');
 
         try {
             console.log('[VisionAid] Step 0: Setting up UI elements...');
