@@ -56,6 +56,9 @@ class AudioGuide {
         // Near - warning
         else if (zone === ZONE_LABELS.NEAR && this.lastSpokenZone !== ZONE_LABELS.NEAR) {
             message = AUDIO_MESSAGES.NEAR;
+            if (fusionResult.distanceMeters) {
+                message = `Obstacle ahead, ${fusionResult.distanceMeters.toFixed(1)} meters.`;
+            }
             priority = 'high';
         }
         // Clear - only announce if coming from danger zone

@@ -31,7 +31,13 @@ class GeometryValidator {
             const hasDiscontinuity = this.detectDiscontinuities(centralDepth);
 
             // Convert depth to distance zone
-            const zone = this.depthToZone(minDepth);
+            // Estimate distance in meters first
+            const distanceMeters = this.estimateDistance(minDepth);
+
+            // Use configured distance thresholds
+            let zone = 'CLEAR';
+            if (distanceMeters < CONFIG.ZONES.VERY_CLOSE) zone = 'VERY_CLOSE';
+            else if (distanceMeters < CONFIG.ZONES.NEAR) zone = 'NEAR';
 
             // Calculate confidence based on depth variance
             const confidence = this.calculateConfidence(centralDepth);
@@ -39,6 +45,7 @@ class GeometryValidator {
             return {
                 success: true,
                 zone,
+                distanceMeters,
                 minDepth,
                 hasDiscontinuity,
                 confidence,
@@ -108,20 +115,58 @@ class GeometryValidator {
     }
 
     /**
-     * Convert normalized depth to distance zone
-     * Depth-Anything outputs relative depth, so we use heuristics
+     * Map normalized depth to distance zone
+     * Note: Normalized depth is 0-1 (0=closest, 1=farthest) in our engine
+     * But usually depth maps are 1/distance
      */
-    depthToZone(normalizedDepth) {
-        // Inverse relationship: lower depth value = closer object
-        // These thresholds are heuristic and may need tuning
+    depthToZone(minDepth) {
+        // Estimate distance in meters
+        const distance = this.estimateDistance(minDepth);
 
-        if (normalizedDepth < 0.2) {
-            return ZONE_LABELS.VERY_CLOSE;
-        } else if (normalizedDepth < 0.5) {
-            return ZONE_LABELS.NEAR;
-        } else {
-            return ZONE_LABELS.CLEAR;
-        }
+        // Use configured distance thresholds
+        if (distance < CONFIG.ZONES.VERY_CLOSE) return 'VERY_CLOSE';
+        if (distance < CONFIG.ZONES.NEAR) return 'NEAR';
+        return 'CLEAR';
+    }
+
+    /**
+     * Estimate rough distance in meters from normalized depth
+     * Uses inverse relationship: Distance = Scale / Depth
+     */
+    estimateDistance(depthVal) {
+        // Calibration constant: assumed max detection range ~5 meters
+        // depthVal is 0..1 where 0 is close, 1 is far (reversed in our normalization?)
+        // Let's verify normalization:
+        // In depth-engine: normalized = (val - min) / range
+        // Usually models output large values for close objects.
+        // Let's assume standard disparity: Disparity ~ 1/Distance
+
+        // Empirically tuned for WebCam FOV
+        if (depthVal < 0.01) return 5.0; // Far away
+
+        // Distance roughly 0.5m to 5m
+        // Formula: d = C / pixel_val
+        // Let's use a simpler linear mapping for the Demo/Relative mode if calibration is missing
+        // Real distance estimation requires camera intrinsics
+
+        // For now, map 0-1 inverse to 0.5m-5m
+        // If depthVal is normalized disparity (1=close, 0=far):
+        // Distance = 0.5 + (1 - depthVal) * 4.5
+
+        // Wait, depth-engine normalize: 
+        // We need to know if 1 is close or far. 
+        // Usually Depth Anything: Bright (High value) = Close.
+        // So Normalized 1 = Close, 0 = Far.
+
+        // Inverted logic:
+        const normalizedDisparity = depthVal; // 0..1 (0=far, 1=close)
+
+        // Avoid divide by zero
+        const safeDisp = Math.max(0.1, normalizedDisparity);
+        const estimatedMeters = 1.0 / safeDisp;
+
+        // Clamp to reasonable range
+        return Math.min(Math.max(estimatedMeters, 0.3), 5.0);
     }
 
     /**

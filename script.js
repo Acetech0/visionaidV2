@@ -179,7 +179,11 @@ class VisionAidApp {
         const confidence = fusionResult.confidence;
 
         // Update zone indicator
-        this.zoneText.textContent = zone;
+        if (fusionResult.distanceMeters) {
+            this.zoneText.textContent = `${zone} (${fusionResult.distanceMeters.toFixed(1)}m)`;
+        } else {
+            this.zoneText.textContent = zone;
+        }
 
         // Update zone indicator color
         this.zoneIndicator.className = 'zone-indicator';
