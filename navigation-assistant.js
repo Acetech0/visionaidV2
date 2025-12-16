@@ -89,8 +89,6 @@ export default class NavigationAssistant {
         if (relativeX < 0.33) {
             // Object is on Left
             action = 'Object Left';
-            // Suggest moving Right is usually safe if no object there? 
-            // For MVP simplicty: "Object on Left" implies path is clear elsewhere or user should attend.
             message = `${criticalObj.class} on Left.`;
         } else if (relativeX > 0.66) {
             // Object is on Right
@@ -99,9 +97,12 @@ export default class NavigationAssistant {
         } else {
             // Object is Center - Collision Hazard!
             action = 'Dodge';
-            // Suggest direction? 
-            // If strictly center, usually "Move Left" or "Move Right". Default to Right.
             message = `${criticalObj.class} Ahead. Move Right.`;
+        }
+
+        // Append distance to message if available
+        if (distanceMeters > 0) {
+            message += ` ${distanceMeters.toFixed(1)} meters.`;
         }
 
         this.lastGuidanceTime = now;
