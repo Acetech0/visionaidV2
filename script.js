@@ -108,10 +108,13 @@ class VisionAidApp {
             console.log('[VisionAid] Depth engine init result:', depthResult);
 
             if (!depthResult.success) {
-                console.error('[VisionAid] Depth engine failed to initialize');
-                throw new Error('Failed to initialize depth engine');
+                console.error('[VisionAid] Depth engine failed to initialize:', depthResult.error);
+                this.updateSystemStatus('Depth Error (Partial Mode)');
+                // Don't throw, allow app to continue in partial mode
+                // throw new Error('Failed to initialize depth engine');
+            } else {
+                console.log('[VisionAid] Depth engine initialized successfully');
             }
-            console.log('[VisionAid] Depth engine initialized successfully');
 
             console.log('[VisionAid] Step 4b: Initializing object detector...');
             // Initialize object detector
