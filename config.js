@@ -10,8 +10,9 @@ export const CONFIG = {
 
     // Distance zones (in meters)
     ZONES: {
-        VERY_CLOSE: 0.6,  // < 0.6m
-        NEAR: 1.5         // 0.6m - 1.5m, > 1.5m is CLEAR
+        VERY_CLOSE: 3.0,  // < 3.0m
+        NEAR: 6.0,        // 3.0m - 6.0m
+        CLEAR_LIMIT: 12.0 // > 6.0m up to 12m is CLEAR
     },
 
     // Fusion logic parameters - optimized for performance

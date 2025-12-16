@@ -1,7 +1,8 @@
-/**
  * Navigation Assistant
- * Analyzes object positions to provide dodge/avoidance guidance
- */
+    * Analyzes object positions to provide dodge / avoidance guidance
+        */
+import { CONFIG } from './config.js';
+
 export default class NavigationAssistant {
     constructor() {
         this.lastGuidanceTime = 0;
@@ -13,8 +14,9 @@ export default class NavigationAssistant {
      * @param {Array} detections - List of object detections
      * @param {Number} frameWidth - Width of the video frame
      * @param {Number} frameHeight - Height of the video frame
+     * @param {Object} depthMap - Optional depth map { data, width, height }
      */
-    evaluate(detections, frameWidth, frameHeight) {
+    evaluate(detections, frameWidth, frameHeight, depthMap = null) {
         if (!detections || detections.length === 0) return null;
 
         const now = Date.now();
@@ -41,14 +43,43 @@ export default class NavigationAssistant {
         const centerX = x + (w / 2);
         const relativeX = centerX / frameWidth;
 
-        // 3. Determine Distance Zone (using heuristic height ratio)
-        const heightRatio = h / frameHeight;
+        // 3. Determine Distance Zone
+        // Prefer Depth Map if available, else Fallback to BBox
+        let distanceMeters = -1;
         let distanceCategory = 'Safe';
-        if (heightRatio > 0.6) distanceCategory = 'Very Close';
-        else if (heightRatio > 0.3) distanceCategory = 'Near';
 
-        // Only guide if object is significant
-        if (distanceCategory === 'Safe') return null;
+        if (depthMap && depthMap.data) {
+            // Sample depth at object center
+            // Map video coordinates to depth map coordinates
+            const depthX = Math.floor(centerX * (depthMap.width / frameWidth));
+            const depthY = Math.floor((y + h / 2) * (depthMap.height / frameHeight));
+
+            const idx = depthY * depthMap.width + depthX;
+            const depthVal = depthMap.data[idx]; // 0 (far) to 1 (close)
+
+            // Convert to meters using calibration K=0.6
+            const safeDisp = Math.max(0.05, depthVal);
+            distanceMeters = 0.6 / safeDisp;
+
+            // Categorize
+            if (distanceMeters < CONFIG.ZONES.VERY_CLOSE) distanceCategory = 'Very Close';
+            else if (distanceMeters < CONFIG.ZONES.NEAR) distanceCategory = 'Near';
+            else if (distanceMeters < CONFIG.ZONES.CLEAR_LIMIT) distanceCategory = 'Clear';
+            else distanceCategory = 'Safe'; // > 12m
+
+        } else {
+            // Fallback: Height Ratio
+            const heightRatio = h / frameHeight;
+            if (heightRatio > 0.6) distanceCategory = 'Very Close';
+            else if (heightRatio > 0.3) distanceCategory = 'Near';
+        }
+
+        // Only guide if object is significant (now strictly based on zones)
+        if (distanceCategory === 'Safe' || distanceCategory === 'Clear') {
+            // Maybe announce 'Clear' if previously close? 
+            // For now, only dodge if Very Close or Near
+            return null;
+        }
 
         // 4. Formulate Guidance
         let message = '';

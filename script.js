@@ -163,10 +163,26 @@ class VisionAidApp {
                 this.drawDetections(detections);
 
                 // Navigation Assistance
+                // Try to get depth map
+                let depthMap = null;
+                if (this.depthEngine && this.depthEngine.isReady) {
+                    // We need the latest depth map. 
+                    // processFrame logic usually runs depth estimation.
+                    // For now, let's assume depthEngine has a 'lastDepthMap' or we run it?
+                    // The original processFrame likely ran depthEngine.estimateDepth().
+                    // Let's run it here if we can, or skip if too expensive?
+                    // Depth estimation is expensive. Let's try to run it.
+                    const depthResult = await this.depthEngine.estimateDepth(this.videoElement);
+                    if (depthResult.success) {
+                        depthMap = depthResult.depthMap;
+                    }
+                }
+
                 const guidance = this.navAssistant.evaluate(
                     detections,
                     this.videoElement.videoWidth,
-                    this.videoElement.videoHeight
+                    this.videoElement.videoHeight,
+                    depthMap
                 );
 
                 if (guidance) {

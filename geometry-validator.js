@@ -115,12 +115,25 @@ class GeometryValidator {
         // Empirically tuned mapping
         // depthVal: 0 (far) to 1 (close)
 
-        // Avoid divide by zero
-        const safeDisp = Math.max(0.1, depthVal);
-        const estimatedMeters = 1.0 / safeDisp;
+        // Inverse relationship: Distance ~ 1/Depth
+        // If max depth (1.0) is ~0.5m (very close)
+        // Then min depth (0.05) should be ~10m+
 
-        // Clamp to reasonable range [0.3m, 5.0m]
-        return Math.min(Math.max(estimatedMeters, 0.3), 5.0);
+        const safeDisp = Math.max(0.05, depthVal);
+        // Scalar K = 0.5 * 1.0 = 0.5 (for close range consistency) -> Too small
+        // Let's try matching the users range:
+        // very close < 3m. depth > ~0.2
+        // near < 6m. depth > ~0.1
+
+        // func: meters = K / depth
+        // 3 = K / 0.2 -> K = 0.6
+        // Check: 6 = 0.6 / 0.1 -> matches.
+
+        const K = 0.6;
+        const estimatedMeters = K / safeDisp;
+
+        // Clamp to reasonable range [0.3m, 12.0m]
+        return Math.min(Math.max(estimatedMeters, 0.3), 12.0);
     }
 }
 
