@@ -72,6 +72,9 @@ class MotionDetector {
     /**
      * Extract grayscale frame for motion detection
      */
+    /**
+     * Extract grayscale frame for motion detection
+     */
     extractGrayscaleFrame(videoElement) {
         const width = videoElement.videoWidth;
         const height = videoElement.videoHeight;
@@ -79,27 +82,38 @@ class MotionDetector {
         // Downsample for performance (quarter resolution)
         const scaledWidth = Math.floor(width / 4);
         const scaledHeight = Math.floor(height / 4);
+        const size = scaledWidth * scaledHeight;
 
-        this.canvas.width = scaledWidth;
-        this.canvas.height = scaledHeight;
+        // Resize canvas if needed
+        if (this.canvas.width !== scaledWidth || this.canvas.height !== scaledHeight) {
+            this.canvas.width = scaledWidth;
+            this.canvas.height = scaledHeight;
+        }
+
+        // Check buffer size
+        if (!this.grayscaleBuffer || this.grayscaleBuffer.length !== size) {
+            this.grayscaleBuffer = new Uint8Array(size);
+        }
 
         // Draw and convert to grayscale
         this.ctx.drawImage(videoElement, 0, 0, scaledWidth, scaledHeight);
         const imageData = this.ctx.getImageData(0, 0, scaledWidth, scaledHeight);
-        const grayscale = new Uint8Array(scaledWidth * scaledHeight);
+        const data = imageData.data;
 
-        for (let i = 0; i < grayscale.length; i++) {
+        // Single pass conversion
+        for (let i = 0; i < size; i++) {
             const offset = i * 4;
-            // Convert to grayscale using luminance formula
-            grayscale[i] = Math.floor(
-                0.299 * imageData.data[offset] +
-                0.587 * imageData.data[offset + 1] +
-                0.114 * imageData.data[offset + 2]
+            // Quick luminance approx: (R+R+B+G+G+G)/6 or just standard
+            // Standard: 0.299R + 0.587G + 0.114B
+            this.grayscaleBuffer[i] = (
+                0.299 * data[offset] +
+                0.587 * data[offset + 1] +
+                0.114 * data[offset + 2]
             );
         }
 
         return {
-            data: grayscale,
+            data: this.grayscaleBuffer,
             width: scaledWidth,
             height: scaledHeight
         };

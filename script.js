@@ -87,13 +87,7 @@ class VisionAidApp {
                 throw new Error('Failed to initialize depth engine');
             }
 
-            if (depthResult.demoMode) {
-                this.updateSystemStatus('Ready (Demo Mode)');
-                console.warn('[VisionAid] Running in DEMO MODE - using simulated depth estimation');
-            } else {
-                this.updateSystemStatus('Ready');
-            }
-
+            this.updateSystemStatus('Ready');
             this.audioGuide.speakSystem('SYSTEM_READY');
 
             // Start processing loop
@@ -219,23 +213,33 @@ class VisionAidApp {
     visualizeDepthMap(depthMap) {
         const { data, width, height } = depthMap;
 
-        this.depthCanvas.width = width;
-        this.depthCanvas.height = height;
+        if (this.depthCanvas.width !== width || this.depthCanvas.height !== height) {
+            this.depthCanvas.width = width;
+            this.depthCanvas.height = height;
+            this.debugImageData = null; // Reset if size changes
+        }
 
         const ctx = this.depthCanvas.getContext('2d');
-        const imageData = ctx.createImageData(width, height);
+
+        // Reuse ImageData
+        if (!this.debugImageData) {
+            this.debugImageData = ctx.createImageData(width, height);
+        }
+
+        const imgData = this.debugImageData;
+        const pixels = imgData.data;
 
         // Convert depth to grayscale
         for (let i = 0; i < data.length; i++) {
             const value = Math.floor(data[i] * 255);
             const offset = i * 4;
-            imageData.data[offset] = value;
-            imageData.data[offset + 1] = value;
-            imageData.data[offset + 2] = value;
-            imageData.data[offset + 3] = 255;
+            pixels[offset] = value;
+            pixels[offset + 1] = value;
+            pixels[offset + 2] = value;
+            pixels[offset + 3] = 255;
         }
 
-        ctx.putImageData(imageData, 0, 0);
+        ctx.putImageData(imgData, 0, 0);
     }
 
     /**
