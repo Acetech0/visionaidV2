@@ -55,7 +55,6 @@ class VisionAidApp {
      * Initialize the application
      */
     async init() {
-        // ... (existing init code) ...
         console.log('[VisionAid] Initializing...');
         this.updateSystemStatus('Initializing...');
 
