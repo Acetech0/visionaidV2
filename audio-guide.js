@@ -16,6 +16,8 @@ class AudioGuide {
         this.currentZone = ZONE_LABELS.UNKNOWN;
         this.lastSpokenZone = ZONE_LABELS.UNKNOWN;
         this.lastSpeechEnd = 0;
+        this.lastSpeechStart = 0;
+        this.currentUtterance = null;
     }
 
     /**
@@ -95,36 +97,52 @@ class AudioGuide {
     /**
      * Speak a message with priority and cooldown management
      */
+    /**
+     * Speak a message with priority and cooldown management
+     */
     speak(message, priority = 'normal', zone = null) {
         if (!this.isInitialized || !this.synthesis) return;
 
+        const now = Date.now();
+
+        // FAILSAFE: If we think we are speaking but it's been > 5 seconds, assume we are stuck.
+        if (this.isSpeaking && (now - this.lastSpeechStart > 5000)) {
+            console.warn('[AudioGuide] Failsafe: Resetting stuck speech state');
+            this.synthesis.cancel();
+            this.isSpeaking = false;
+        }
+
         // Constraint 1: Do not interrupt if already speaking (unless critical emergency)
-        // User requested: "let it complete it first"
         if (this.isSpeaking && priority !== 'critical') {
+            // console.log('[AudioGuide] Blocked: Already speaking');
             return;
         }
 
         // Constraint 2: "wait 2 sec before speaking again"
-        const now = Date.now();
+        // Wait 2000ms after the LAST speech ended
         if (now - this.lastSpeechEnd < 2000 && priority !== 'critical') {
+            // console.log('[AudioGuide] Blocked: In 2s cooldown');
             return;
         }
 
-        // Check cooldown
+        // Check zone cooldown
         if (zone && !this.canSpeak(zone, priority)) {
             return;
         }
 
-
         // Critical messages interrupt everything
         if (priority === 'critical') {
             this.cancelNonCritical();
+            this.isSpeaking = false;
         }
 
         try {
             // Create utterance
             const utterance = new SpeechSynthesisUtterance(message);
-            utterance.rate = 1.0; // Normal speech rate (0.1 to 10)
+            // Store reference to prevent Garbage Collection (Common browser bug)
+            this.currentUtterance = utterance;
+
+            utterance.rate = 1.0;
             utterance.pitch = 1.0;
             utterance.volume = 1.0;
 
@@ -139,7 +157,7 @@ class AudioGuide {
 
             // Event handlers
             utterance.onstart = () => {
-                // Logging if needed
+                this.lastSpeechStart = Date.now(); // Track start time for failsafe
                 if (CONFIG.DEBUG.LOG_DETECTIONS) {
                     console.log(`[AudioGuide] Speaking: "${message}"`);
                 }
@@ -148,6 +166,7 @@ class AudioGuide {
             utterance.onend = () => {
                 this.isSpeaking = false;
                 this.lastSpeechEnd = Date.now();
+                this.currentUtterance = null; // Release ref
                 if (zone) {
                     this.lastMessageTime[zone] = Date.now();
                     this.lastSpokenZone = zone;
@@ -155,15 +174,15 @@ class AudioGuide {
             };
 
             utterance.onerror = (event) => {
+                console.warn('[AudioGuide] TTS Error:', event);
                 this.isSpeaking = false;
-                if (zone) {
-                    this.lastMessageTime[zone] = Date.now();
-                }
+                this.currentUtterance = null;
+                this.lastSpeechEnd = Date.now(); // Treat error as end to allow continuation
             };
 
-
             // Speak
-            this.isSpeaking = true; // Lock immediately to prevent queue flooding
+            this.isSpeaking = true;
+            this.lastSpeechStart = Date.now();
             this.synthesis.speak(utterance);
         } catch (error) {
             console.warn('[AudioGuide] Speech failed:', error.message);
