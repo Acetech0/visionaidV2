@@ -10,6 +10,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <!-- TensorFlow.js and COCO-SSD -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 </head>
 
 <body>
@@ -30,6 +33,8 @@
 
                 <!-- Debug: Depth Map Visualization -->
                 <canvas id="depth-canvas" class="depth-canvas hidden"></canvas>
+                <!-- Object Detection Visualization -->
+                <canvas id="detection-canvas" class="detection-canvas"></canvas>
 
                 <div id="camera-error" class="error-message hidden">
                     <p>Camera access denied or unavailable</p>

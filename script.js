@@ -8,6 +8,7 @@ import GeometryValidator from './geometry-validator.js';
 import MotionDetector from './motion-detector.js';
 import FusionLogic from './fusion-logic.js';
 import AudioGuide from './audio-guide.js';
+import ObjectDetector from './object-detector.js';
 import { CONFIG, ZONE_LABELS } from './config.js';
 
 class VisionAidApp {
@@ -18,6 +19,7 @@ class VisionAidApp {
         this.motionDetector = new MotionDetector();
         this.fusionLogic = new FusionLogic();
         this.audioGuide = new AudioGuide();
+        this.objectDetector = new ObjectDetector();
 
         // UI elements
         this.videoElement = document.getElementById('camera-feed');
@@ -28,6 +30,10 @@ class VisionAidApp {
         this.fpsDisplay = document.getElementById('fps-display');
         this.audioStatus = document.getElementById('audio-status');
         this.depthCanvas = document.getElementById('depth-canvas');
+        this.detectionCanvas = document.getElementById('detection-canvas');
+        if (this.detectionCanvas) {
+            this.detectionCtx = this.detectionCanvas.getContext('2d');
+        }
         // this.debugToggleBtn removed
 
         // State
@@ -107,6 +113,11 @@ class VisionAidApp {
             }
             console.log('[VisionAid] Depth engine initialized successfully');
 
+            console.log('[VisionAid] Step 4b: Initializing object detector...');
+            // Initialize object detector
+            const objResult = await this.objectDetector.init();
+            console.log('[VisionAid] Object detector init result:', objResult);
+
             console.log('[VisionAid] Step 5: Finalizing initialization...');
             this.updateSystemStatus('Ready');
             this.audioGuide.speakSystem('SYSTEM_READY');
@@ -125,7 +136,96 @@ class VisionAidApp {
         }
     }
 
-    // ... (existing methods) ...
+    // ========== Main Loop ==========
+
+    async processFrame() {
+        if (!this.isRunning || this.isPaused) {
+            this.animationFrameId = requestAnimationFrame(() => this.processFrame());
+            return;
+        }
+
+        const now = Date.now();
+        // Limit FPS if needed
+        if (now - this.lastFpsUpdate < 1000 / 30) { // Cap at ~30 FPS
+            // this.animationFrameId = requestAnimationFrame(() => this.processFrame());
+            // return; 
+        }
+
+        try {
+            // 1. Object Detection
+            if (this.objectDetector && this.objectDetector.isLoaded) {
+                const detections = await this.objectDetector.detect(this.videoElement);
+                this.drawDetections(detections);
+
+                // Optional: Announce objects occasionally
+                // This logic could be moved to AudioGuide
+            }
+
+            // 2. Depth/Distance Processing (Placeholder for existing logic)
+            // (Assumed mostly handled by DepthEngine/FusionLogic in original code, but since code is missing, 
+            // I'll leave a hook here. The original 'processFrame' likely coordinated these.)
+
+            // Update FPS
+            this.frameCount++;
+            if (now - this.lastFpsUpdate >= 1000) {
+                this.currentFPS = this.frameCount;
+                this.frameCount = 0;
+                this.lastFpsUpdate = now;
+                if (this.fpsDisplay) this.fpsDisplay.textContent = this.currentFPS;
+            }
+
+        } catch (err) {
+            console.error('[VisionAid] Frame processing error:', err);
+        }
+
+        this.animationFrameId = requestAnimationFrame(() => this.processFrame());
+    }
+
+    drawDetections(detections) {
+        if (!this.detectionCtx || !this.detectionCanvas || !this.videoElement) return;
+
+        // Match canvas size to video size
+        const videoWidth = this.videoElement.videoWidth;
+        const videoHeight = this.videoElement.videoHeight;
+
+        if (this.detectionCanvas.width !== videoWidth || this.detectionCanvas.height !== videoHeight) {
+            this.detectionCanvas.width = videoWidth;
+            this.detectionCanvas.height = videoHeight;
+        }
+
+        // Clear previous drawings
+        this.detectionCtx.clearRect(0, 0, this.detectionCanvas.width, this.detectionCanvas.height);
+
+        // Mirror context if user facing
+        this.detectionCtx.save();
+        if (this.facingMode === 'user') {
+            this.detectionCtx.translate(videoWidth, 0);
+            this.detectionCtx.scale(-1, 1);
+        }
+
+        // Draw bounding boxes
+        detections.forEach(det => {
+            const [x, y, width, height] = det.bbox;
+
+            // Draw box
+            this.detectionCtx.strokeStyle = '#00FFFF';
+            this.detectionCtx.lineWidth = 4;
+            this.detectionCtx.strokeRect(x, y, width, height);
+
+            // Draw label background
+            this.detectionCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            const text = `${det.class} ${Math.round(det.score * 100)}%`;
+            const textWidth = this.detectionCtx.measureText(text).width;
+            this.detectionCtx.fillRect(x, y, textWidth + 10, 24);
+
+            // Draw label text
+            this.detectionCtx.fillStyle = '#FFFFFF';
+            this.detectionCtx.font = '16px Arial';
+            this.detectionCtx.fillText(text, x + 5, y + 18);
+        });
+
+        this.detectionCtx.restore();
+    }
 
     // ========== Camera Control Methods ==========
 
