@@ -28,7 +28,7 @@ class VisionAidApp {
         this.fpsDisplay = document.getElementById('fps-display');
         this.audioStatus = document.getElementById('audio-status');
         this.depthCanvas = document.getElementById('depth-canvas');
-        this.debugToggleBtn = document.getElementById('debug-toggle-btn');
+        // this.debugToggleBtn removed
 
         // State
         this.isRunning = false;
@@ -65,7 +65,6 @@ class VisionAidApp {
         if (this.systemStatus && this.systemStatus.parentElement) {
             this.systemStatus.parentElement.parentElement.style.display = 'flex';
         }
-        if (this.debugToggleBtn) this.debugToggleBtn.style.display = 'flex';
 
         try {
             // ... (rest of init)
@@ -80,9 +79,6 @@ class VisionAidApp {
 
             // Set up camera controls
             this.setupCameraControls();
-
-            // Set up debug toggle
-            this.debugToggleBtn.addEventListener('click', () => this.toggleDebug());
 
             // Start camera
             await this.startCamera();
