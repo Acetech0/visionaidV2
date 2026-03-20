@@ -1,11 +1,13 @@
 /**
  * Navigation Assistant
  * Improvements applied:
- *   #1 - Threat score: area × (1 / distance) instead of raw area
+ *   #1 - Pinhole metric distance via ObjectSizeEstimator (physics-based)
  *   #2 - Depth sampled at bbox bottom 85% (ground-level) instead of center
+ *   #4 - Dodge direction hysteresis (dead zone ±0.05 around boundaries)
  *   #8 - Dodge direction based on 10-frame historical side-clearance
  */
 import { CONFIG } from './config.js';
+import ObjectSizeEstimator from './object-size-estimator.js';
 
 export default class NavigationAssistant {
     constructor() {
@@ -15,6 +17,11 @@ export default class NavigationAssistant {
         // Improvement #8: track historical obstacle counts per side over last 10 frames
         this.sideHistory = [];         // array of 'left' | 'right' | 'center'
         this.MAX_SIDE_HISTORY = 10;
+
+        // Improvement #4: dodge direction hysteresis
+        // Prevents left/right flipping when object is near the boundary
+        this._lastDodgeDirection = 'center'; // 'left' | 'right' | 'center'
+        this.HYSTERESIS_BUFFER   = 0.05;     // dead zone around 0.33 / 0.66 boundaries
     }
 
     /**
@@ -30,23 +37,34 @@ export default class NavigationAssistant {
 
     /**
      * Improvement #1: Compute threat score for a detection.
-     * score = bbox_area × (1 / distance_meters)
-     * Requires depth map; falls back to area alone if unavailable.
+     * Priority: pinhole camera distance (physics) > depth map (fallback)
+     * Returns { score, distMeters }
      */
     _threatScore(det, depthMap, frameWidth, frameHeight, K) {
         const [x, y, w, h] = det.bbox;
         const area = w * h;
 
-        if (!depthMap || !depthMap.data) return area;
+        // --- Improvement #1: try physics-based distance first ---
+        const pinholeResult = ObjectSizeEstimator.estimate(
+            det.class, h, frameHeight, det.score
+        );
+
+        if (pinholeResult.distance !== null) {
+            const dist = Math.max(0.1, pinholeResult.distance);
+            return { score: area * (1 / dist), distMeters: dist, method: 'pinhole' };
+        }
+
+        // --- Fallback: depth map ---
+        if (!depthMap || !depthMap.data) return { score: area, distMeters: -1, method: 'bbox_ratio' };
 
         // Improvement #2: sample at 85% down the bbox (object-ground contact point)
-        const sampleX = x + w / 2;
-        const sampleY = y + h * 0.85;
+        const sampleX  = x + w / 2;
+        const sampleY  = y + h * 0.85;
         const depthVal = this._sampleDepth(depthMap, sampleX, sampleY, frameWidth, frameHeight);
         const safeDisp = Math.max(0.05, depthVal);
         const distMeters = K / safeDisp;
 
-        return { score: area * (1 / distMeters), distMeters };
+        return { score: area * (1 / distMeters), distMeters, method: 'depth_map' };
     }
 
     /**
@@ -96,10 +114,19 @@ export default class NavigationAssistant {
 
         if (!criticalObj) return null;
 
-        // ── Determine horizontal position ─────────────────────────────────────
-        const [x, y, w, h] = criticalObj.bbox;
-        const centerX  = x + w / 2;
-        const relativeX = centerX / frameWidth;
+        // ── Improvement #4: hysteresis on horizontal position ────────────────
+        // Hard boundaries cause flipping when relativeX ≈ 0.33 or 0.66.
+        // Dead zone of ±0.05 keeps the last direction until object clearly crosses.
+        const BUF = this.HYSTERESIS_BUFFER;
+        let hysteresisDirection;
+        if      (relativeX < 0.33 - BUF) hysteresisDirection = 'left';
+        else if (relativeX > 0.66 + BUF) hysteresisDirection = 'right';
+        else if (relativeX < 0.33 + BUF && this._lastDodgeDirection === 'left')   hysteresisDirection = 'left';
+        else if (relativeX > 0.66 - BUF && this._lastDodgeDirection === 'right')  hysteresisDirection = 'right';
+        else if (this._lastDodgeDirection !== 'center' &&
+                 relativeX >= 0.33 - BUF && relativeX <= 0.66 + BUF)              hysteresisDirection = 'center';
+        else                                                                        hysteresisDirection = 'center';
+        this._lastDodgeDirection = hysteresisDirection;
 
         // ── Distance classification ───────────────────────────────────────────
         let distanceMeters   = criticalDist;
@@ -121,20 +148,17 @@ export default class NavigationAssistant {
         if (distanceCategory === 'Safe' || distanceCategory === 'Clear') return null;
 
         // ── Improvement #8: record this frame's obstacle side ─────────────────
-        const obstacleSide = relativeX < 0.33 ? 'left'
-                            : relativeX > 0.66 ? 'right'
-                            : 'center';
-        this.sideHistory.push(obstacleSide);
+        this.sideHistory.push(hysteresisDirection);
         if (this.sideHistory.length > this.MAX_SIDE_HISTORY) this.sideHistory.shift();
 
         // ── Formulate guidance ────────────────────────────────────────────────
         let action, moveStr, message;
         const distStr = distanceMeters > 0 ? `in ${distanceMeters.toFixed(1)} meter` : 'nearby';
 
-        if (relativeX < 0.33) {
+        if (hysteresisDirection === 'left') {
             action  = 'Object Left';
             moveStr = 'move right';
-        } else if (relativeX > 0.66) {
+        } else if (hysteresisDirection === 'right') {
             action  = 'Object Right';
             moveStr = 'move left';
         } else {
@@ -146,7 +170,7 @@ export default class NavigationAssistant {
         if (action === 'Dodge') {
             message = `${criticalObj.class} ahead ${distStr}, ${moveStr}.`;
         } else {
-            const side = relativeX < 0.33 ? 'on left' : 'on right';
+            const side = hysteresisDirection === 'left' ? 'on left' : 'on right';
             message = `${criticalObj.class} ${side} ${distStr}, ${moveStr}.`;
         }
 

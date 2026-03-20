@@ -10,6 +10,7 @@ import FusionLogic from './fusion-logic.js';
 import AudioGuide from './audio-guide.js';
 import ObjectDetector from './object-detector.js';
 import NavigationAssistant from './navigation-assistant.js';
+import ObjectTracker from './object-tracker.js';
 import { CONFIG, ZONE_LABELS } from './config.js';
 
 class VisionAidApp {
@@ -22,6 +23,7 @@ class VisionAidApp {
         this.audioGuide = new AudioGuide();
         this.objectDetector = new ObjectDetector();
         this.navAssistant = new NavigationAssistant();
+        this.objectTracker = new ObjectTracker(); // Improvement #3: class locking
 
         // UI elements
         this.videoElement = document.getElementById('camera-feed');
@@ -161,7 +163,9 @@ class VisionAidApp {
             // 1. Object Detection
             let detections = [];
             if (this.objectDetector && this.objectDetector.isLoaded) {
-                detections = await this.objectDetector.detect(this.videoElement);
+                const rawDetections = await this.objectDetector.detect(this.videoElement);
+                // Improvement #3: stabilise through class tracker to prevent flipping
+                detections = this.objectTracker.update(rawDetections);
                 this.drawDetections(detections);
             }
 
@@ -318,6 +322,11 @@ class VisionAidApp {
         // Toggle facing mode
         this.facingMode = this.facingMode === 'user' ? 'environment' : 'user';
         console.log(`[VisionAid] Switching camera to: ${this.facingMode}`);
+
+        // Reset per-camera state
+        this.objectTracker.reset();
+        // Also clear pinhole FOV cache since resolution may change
+        import('./object-size-estimator.js').then(m => m.default.onCameraSwitch());
 
         // Restart camera if it's currently on
         if (this.isCameraOn) {

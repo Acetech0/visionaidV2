@@ -196,10 +196,6 @@ class AudioGuide {
                 this.isSpeaking = false;
                 this.lastSpeechEnd = Date.now();
                 this.currentUtterance = null; // Release ref
-                // Improvement #5: record cooldown against composite key
-                if (cooldownKey) {
-                    this.lastMessageTime[cooldownKey] = Date.now();
-                }
                 if (zone) this.lastSpokenZone = zone;
             };
 
@@ -209,6 +205,13 @@ class AudioGuide {
                 this.currentUtterance = null;
                 this.lastSpeechEnd = Date.now(); // Treat error as end to allow continuation
             };
+
+            // Improvement #2: Set cooldown SYNCHRONOUSLY before speak fires
+            // (prevents two consecutive frames from both passing the cooldown check
+            //  before the onend callback has a chance to write the timestamp)
+            if (cooldownKey) {
+                this.lastMessageTime[cooldownKey] = Date.now();
+            }
 
             // Speak
             this.isSpeaking = true;

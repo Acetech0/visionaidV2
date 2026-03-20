@@ -15,6 +15,10 @@ class GeometryValidator {
         this._calibFrames      = 0;
         this._calibDone        = false;
         this.CALIB_FRAMES      = 20;    // number of startup frames to sample
+
+        // Improvement #5: EMA smoothing for raw depth readings
+        this.EMA_ALPHA         = 0.25;  // lower = smoother (more lag), higher = more reactive
+        this._smoothedDepth    = null;  // null until first frame
     }
 
     /**
@@ -106,8 +110,18 @@ class GeometryValidator {
                 }
             }
 
-            // Convert to distance/zone using adaptiveK
-            const distanceMeters = this.estimateDistance(percentile5);
+            // Improvement #5: EMA smoothing on percentile5
+            // Prevents 1.4m→0.5m spike from immediately triggering DANGER
+            if (this._smoothedDepth === null) {
+                this._smoothedDepth = percentile5;
+            } else {
+                this._smoothedDepth = (this.EMA_ALPHA * percentile5)
+                                    + ((1 - this.EMA_ALPHA) * this._smoothedDepth);
+            }
+            const smoothedP5 = this._smoothedDepth;
+
+            // Convert to distance/zone using adaptiveK (on smoothed value)
+            const distanceMeters = this.estimateDistance(smoothedP5);
 
             let zone = ZONE_LABELS.CLEAR;
             if (distanceMeters < CONFIG.ZONES.VERY_CLOSE) zone = ZONE_LABELS.VERY_CLOSE;
