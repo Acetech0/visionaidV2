@@ -174,12 +174,6 @@ export default class NavigationAssistant {
             message = `${criticalObj.class} ${side} ${distStr}, ${moveStr}.`;
         }
 
-        // Log to activity panel
-        if (typeof VisionLog !== 'undefined') {
-            const logZone = distanceCategory === 'Very Close' ? 'danger' : 'warn';
-            VisionLog.add(message, logZone);
-        }
-
         this.lastGuidanceTime = now;
         return {
             hasGuidance: true,

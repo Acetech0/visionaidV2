@@ -13,10 +13,11 @@ class AudioGuide {
         this.messageQueue = [];
         this.lastMessageTime = {};
         this.currentZone = ZONE_LABELS.UNKNOWN;
-        this.currentZone = ZONE_LABELS.UNKNOWN;
         this.lastSpokenZone = ZONE_LABELS.UNKNOWN;
         this.lastSpeechEnd = 0;
         this.lastSpeechStart = 0;
+        this.lastSpokenAt = 0;          // global hard gate — no TTS more than once per GLOBAL_MIN_GAP_MS
+        this.GLOBAL_MIN_GAP_MS = 2000;  // absolute minimum gap between any two TTS calls
         this.currentUtterance = null;
         this._voices = [];  // cached voice list (populated on voiceschanged)
     }
@@ -65,41 +66,35 @@ class AudioGuide {
             return;
         }
 
-        const zone = fusionResult.zone;
+        const zone       = fusionResult.zone;
         const confidence = fusionResult.confidence;
         const isFallback = fusionResult.isFallback;
 
-        // Determine appropriate message
-        let message = null;
+        // Determine message + priority
+        let message  = null;
         let priority = 'normal';
 
-        // Very close - immediate danger
         if (zone === ZONE_LABELS.VERY_CLOSE) {
-            message = AUDIO_MESSAGES.VERY_CLOSE;
+            message  = AUDIO_MESSAGES.VERY_CLOSE;
             priority = 'critical';
-        }
-        // Near - warning
-        else if (zone === ZONE_LABELS.NEAR && this.lastSpokenZone !== ZONE_LABELS.NEAR) {
-            message = AUDIO_MESSAGES.NEAR;
-            if (fusionResult.distanceMeters) {
-                message = `Obstacle ahead, ${fusionResult.distanceMeters.toFixed(1)} meters.`;
-            }
+
+        } else if (zone === ZONE_LABELS.NEAR && this.lastSpokenZone !== ZONE_LABELS.NEAR) {
+            // IMPORTANT: do NOT embed floating distance in message — it changes every
+            // frame and makes every cooldown key unique, bypassing the dedup check entirely.
+            message  = AUDIO_MESSAGES.NEAR;   // stable string from config
             priority = 'high';
-        }
-        // Clear - only announce if coming from danger zone
-        else if (zone === ZONE_LABELS.CLEAR &&
+
+        } else if (zone === ZONE_LABELS.CLEAR &&
             (this.lastSpokenZone === ZONE_LABELS.VERY_CLOSE ||
-                this.lastSpokenZone === ZONE_LABELS.NEAR)) {
-            message = AUDIO_MESSAGES.CLEAR;
+             this.lastSpokenZone === ZONE_LABELS.NEAR)) {
+            message  = AUDIO_MESSAGES.CLEAR;
             priority = 'low';
-        }
-        // Uncertain fallback
-        else if (isFallback && confidence < 0.5) {
-            message = AUDIO_MESSAGES.UNCERTAIN;
+
+        } else if (isFallback && confidence < 0.5) {
+            message  = AUDIO_MESSAGES.UNCERTAIN;
             priority = 'normal';
         }
 
-        // Speak message if appropriate
         if (message) {
             this.speak(message, priority, zone);
         }
@@ -108,48 +103,43 @@ class AudioGuide {
     }
 
     /**
-     * Speak a message with priority and cooldown management
-     * @param {string} message - Message to speak
-     * @param {string} priority - 'critical', 'high', 'normal', 'low'
-     * @param {string} zone - Associated zone for cooldown tracking
-     */
-
-
-    /**
      * Speak a message with priority and cooldown management.
-     * Improvements #5 & #7:
-     *   #5 - Cooldown key = zone+objectClass+dodgeSide (not just zone)
-     *   #7 - Tiered cooldowns: DANGER=1.5s, WARNING=3s, SAFE/INFO=5s
-     * @param {string} message      - Message to speak
-     * @param {string} priority     - 'critical', 'high', 'navigation', 'normal', 'low'
-     * @param {string} zone         - Associated zone
-     * @param {string} [objectClass=''] - COCO-SSD class of the primary threat
-     * @param {string} [dodgeSide='']   - 'left', 'right', or '' for non-directional
+     * Gate order (all must pass before synthesis fires):
+     *   1. Global hard gate    — GLOBAL_MIN_GAP_MS between any two calls
+     *   2. isSpeaking guard    — no interrupting ongoing speech (except critical)
+     *   3. Post-speech gap     — 2.5s after last speech ended
+     *   4. Per-key cooldown    — tiered: DANGER=1.5s, WARN=3s, INFO=5s
+     * Cooldown key = zone + objectClass + dodgeSide (no floats — always stable)
      */
     speak(message, priority = 'normal', zone = null, objectClass = '', dodgeSide = '') {
         if (!this.isInitialized || !this.synthesis) return;
 
         const now = Date.now();
 
-        // FAILSAFE: If we think we are speaking but it's been > 5 seconds, assume we are stuck.
+        // Gate 1: Global hard gate — absolute minimum between ANY two TTS calls
+        // This is the first and hardest check — stops spam regardless of key.
+        if (now - this.lastSpokenAt < this.GLOBAL_MIN_GAP_MS && priority !== 'critical') {
+            return;
+        }
+
+        // Gate 2: FAILSAFE — if isSpeaking stuck for >5s, force-reset
         if (this.isSpeaking && (now - this.lastSpeechStart > 5000)) {
             console.warn('[AudioGuide] Failsafe: Resetting stuck speech state');
             this.synthesis.cancel();
             this.isSpeaking = false;
         }
 
-        // Constraint 1: Do not interrupt if already speaking (unless critical emergency)
+        // Gate 3: Do not interrupt ongoing speech (unless critical)
         if (this.isSpeaking && priority !== 'critical') {
             return;
         }
 
-        // Constraint 2: "wait 2 sec before speaking again"
-        // Wait 2000ms after the LAST speech ended
-        if (now - this.lastSpeechEnd < 2000 && priority !== 'critical') {
+        // Gate 4: Minimum gap after last speech ended
+        if (now - this.lastSpeechEnd < 2500 && priority !== 'critical') {
             return;
         }
 
-        // Check zone cooldown — using composite key (Improvement #5)
+        // Gate 5: Per-key cooldown (zone-class-side, no floats)
         const cooldownKey = zone ? `${zone}-${objectClass}-${dodgeSide}` : null;
         if (cooldownKey && !this.canSpeak(cooldownKey, priority)) {
             return;
@@ -211,11 +201,11 @@ class AudioGuide {
             };
 
             // Improvement #2: Set cooldown SYNCHRONOUSLY before speak fires
-            // (prevents two consecutive frames from both passing the cooldown check
-            //  before the onend callback has a chance to write the timestamp)
             if (cooldownKey) {
                 this.lastMessageTime[cooldownKey] = Date.now();
             }
+            // Update global gate synchronously too
+            this.lastSpokenAt = Date.now();
 
             // Speak
             this.isSpeaking = true;

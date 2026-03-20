@@ -213,12 +213,14 @@ class VisionAidApp {
 
                 const coverage = (primary.bbox[2] * primary.bbox[3]) / frameArea;
 
-                // Coverage → estimated distance (emperically tuned)
+                // Coverage → estimated distance
+                // Tightened thresholds: object must genuinely dominate the frame
+                // before we escalate to DANGER/WARN (prevents false alarms at 5 FPS)
                 let estDist;
-                if      (coverage > 0.30) estDist = 0.8;  // VERY_CLOSE
-                else if (coverage > 0.15) estDist = 1.8;  // NEAR
-                else if (coverage > 0.06) estDist = 3.5;  // approach zone
-                else                      estDist = 6.0;  // CLEAR
+                if      (coverage > 0.55) estDist = 0.8;  // fills >55% → truly very close
+                else if (coverage > 0.35) estDist = 1.5;  // NEAR / WARN
+                else if (coverage > 0.15) estDist = 3.0;  // approaching, SAFE-ish
+                else                      estDist = 6.0;  // far, CLEAR
 
                 const bboxZone = estDist < CONFIG.ZONES.VERY_CLOSE ? ZONE_LABELS.VERY_CLOSE
                                : estDist < CONFIG.ZONES.NEAR       ? ZONE_LABELS.NEAR
