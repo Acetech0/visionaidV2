@@ -18,6 +18,7 @@ class AudioGuide {
         this.lastSpeechEnd = 0;
         this.lastSpeechStart = 0;
         this.currentUtterance = null;
+        this._voices = [];  // cached voice list (populated on voiceschanged)
     }
 
     /**
@@ -28,12 +29,12 @@ class AudioGuide {
             this.synthesis = window.speechSynthesis;
             this.isInitialized = true;
 
-            // Chrome loads voices asynchronously
-            if (this.synthesis.onvoiceschanged !== undefined) {
-                this.synthesis.onvoiceschanged = () => {
-                    console.log('[AudioGuide] Voices loaded:', this.synthesis.getVoices().length);
-                };
-            }
+            // Pre-load voices — Chrome loads them async via onvoiceschanged
+            this._voices = this.synthesis.getVoices();
+            this.synthesis.onvoiceschanged = () => {
+                this._voices = this.synthesis.getVoices();
+                console.log('[AudioGuide] Voices loaded:', this._voices.length);
+            };
 
             console.log('[AudioGuide] TTS initialized');
             return { success: true };
@@ -171,20 +172,23 @@ class AudioGuide {
             utterance.volume = 1.0;
 
             // Set voice (prefer female voice for calmness)
-            let voices = this.synthesis.getVoices();
-            // Retry getting voices if empty (sometimes needed)
-            if (voices.length === 0) {
-                voices = window.speechSynthesis.getVoices();
+            // Set voice — three-tier fallback to survive async voice loading
+            const voice = this._getVoice();
+            if (!voice) {
+                // Voices not ready yet — queue a one-shot retry via voiceschanged
+                console.warn('[AudioGuide] No voice available yet — queuing retry');
+                this.isSpeaking = false;
+                const _msg  = message, _pri = priority, _z = zone,
+                      _obj  = objectClass, _side = dodgeSide;
+                this.synthesis.onvoiceschanged = () => {
+                    this._voices = this.synthesis.getVoices();
+                    this.synthesis.onvoiceschanged = () => { this._voices = this.synthesis.getVoices(); };
+                    this.speak(_msg, _pri, _z, _obj, _side);
+                };
+                return;
             }
+            utterance.voice = voice;
 
-            if (voices.length > 0) {
-                const preferredVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Female'));
-                if (preferredVoice) {
-                    utterance.voice = preferredVoice;
-                }
-            }
-
-            // Event handlers
             utterance.onstart = () => {
                 this.lastSpeechStart = Date.now(); // Track start time for failsafe
                 if (CONFIG.DEBUG.LOG_DETECTIONS) {
@@ -257,6 +261,36 @@ class AudioGuide {
         if (key.startsWith('Very Close')) return 1500;
         if (key.startsWith('Near'))       return 3000;
         return 5000;
+    }
+
+    /**
+     * Three-tier voice selection — handles async voice loading in Chrome.
+     * Tier 1: female English voice
+     * Tier 2: any English voice
+     * Tier 3: first available voice
+     * Returns null if no voices loaded yet.
+     */
+    _getVoice() {
+        // Always try fresh in case voices loaded since last check
+        let voices = this._voices;
+        if (!voices || voices.length === 0) {
+            voices = this.synthesis ? this.synthesis.getVoices() : [];
+            this._voices = voices;
+        }
+        if (voices.length === 0) return null;
+
+        // Tier 1: preferred female English
+        const female = voices.find(v =>
+            v.lang.startsWith('en') && v.name.toLowerCase().includes('female')
+        );
+        if (female) return female;
+
+        // Tier 2: any English voice
+        const english = voices.find(v => v.lang.startsWith('en'));
+        if (english) return english;
+
+        // Tier 3: whatever is available
+        return voices[0];
     }
 
     /**

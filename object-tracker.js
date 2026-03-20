@@ -11,20 +11,20 @@
  *   const stableDetections = tracker.update(rawDetections);
  */
 
-const LOCK_THRESHOLD   = 3;  // must win 3 of last 5 frames to lock
-const SWITCH_THRESHOLD = 4;  // must hold 4 consecutive frames to switch
-const HISTORY_SIZE     = 5;
+const LOCK_THRESHOLD     = 3;     // must win 3 of last 5 frames to lock
+const SWITCH_DURATION_MS = 2500;  // must hold new class for 2.5 s to switch
+const HISTORY_SIZE       = 5;
 
 class ObjectTracker {
     constructor() {
         /** @type {string|null} currently locked class */
-        this.lockedClass   = null;
+        this.lockedClass    = null;
         /** @type {string|null} candidate class trying to take over */
-        this.candidateClass = null;
-        /** consecutive frame count for candidate */
-        this.switchCounter  = 0;
+        this.candidateClass  = null;
+        /** timestamp when the candidate first appeared (ms) */
+        this.switchingSince  = null;
         /** last N class observations */
-        this._classHistory  = [];   // array of strings (class names per frame)
+        this._classHistory   = [];   // array of strings (class names per frame)
     }
 
     /**
@@ -55,32 +55,33 @@ class ObjectTracker {
         if (this.lockedClass === null) {
             // No lock yet — check if frameClass has a majority
             if (this._majorityClass() === frameClass) {
-                this.lockedClass    = frameClass;
-                this.candidateClass = null;
-                this.switchCounter  = 0;
+                this.lockedClass     = frameClass;
+                this.candidateClass  = null;
+                this.switchingSince  = null;
             }
         } else if (frameClass === this.lockedClass) {
-            // Reinforcing the lock
+            // Reinforcing the lock — cancel any pending switch
             this.candidateClass = null;
-            this.switchCounter  = 0;
+            this.switchingSince = null;
         } else {
-            // Different class seen — start/continue switch counter
-            if (frameClass === this.candidateClass) {
-                this.switchCounter++;
-            } else {
+            // Different class seen — start or continue the switch timer
+            if (frameClass !== this.candidateClass) {
+                // New candidate — reset timer
                 this.candidateClass = frameClass;
-                this.switchCounter  = 1;
+                this.switchingSince = Date.now();
             }
 
-            if (this.switchCounter >= SWITCH_THRESHOLD) {
-                // Switch lock to new class
+            const elapsed = Date.now() - this.switchingSince;
+            if (elapsed >= SWITCH_DURATION_MS) {
+                // Candidate held long enough — switch lock
                 this.lockedClass    = this.candidateClass;
                 this.candidateClass = null;
-                this.switchCounter  = 0;
+                this.switchingSince = null;
                 if (typeof VisionLog !== 'undefined') {
-                    VisionLog.add(`Tracker locked → ${this.lockedClass}`, 'info');
+                    VisionLog.add(`Tracker → ${this.lockedClass}`, 'info');
                 }
             }
+            // else: timer still running — keep current lock
         }
 
         // Return detections belonging to locked class only (or all if no lock)
@@ -92,7 +93,7 @@ class ObjectTracker {
     reset() {
         this.lockedClass    = null;
         this.candidateClass = null;
-        this.switchCounter  = 0;
+        this.switchingSince = null;
         this._classHistory  = [];
     }
 
