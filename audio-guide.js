@@ -203,6 +203,13 @@ class AudioGuide {
             // Speak
             this.isSpeaking = true;
             this.lastSpeechStart = Date.now();
+            // Log to activity panel
+            if (typeof VisionLog !== 'undefined') {
+                const logZone = (priority === 'critical') ? 'danger' :
+                                (priority === 'high')     ? 'warn'   :
+                                (priority === 'navigation') ? 'warn'  : 'info';
+                VisionLog.add(message, logZone);
+            }
             this.synthesis.speak(utterance);
         } catch (error) {
             console.warn('[AudioGuide] Speech failed:', error.message);

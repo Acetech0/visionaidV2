@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
     <!-- TensorFlow.js and COCO-SSD -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
@@ -79,7 +79,224 @@
             </div>
         </div>
     </main>
-    <script type="module" src="script.js?v=2.2"></script>
+
+    <!-- ── Activity Log Panel ───────────────────────────────── -->
+    <style>
+      /* ── Design tokens ─────────────────────────────────────── */
+      :root {
+        --log-bg:          #0a0c0f;
+        --log-surface:     #111318;
+        --log-border:      #1e2229;
+        --log-border-glow: #2a3040;
+        --log-text:        #c8cdd8;
+        --log-muted:       #4a5060;
+        --log-timestamp:   #3d8aff;
+        --safe-color:      #22c55e;
+        --safe-bg:         rgba(34,197,94,0.08);
+        --warn-color:      #f59e0b;
+        --warn-bg:         rgba(245,158,11,0.08);
+        --danger-color:    #ef4444;
+        --danger-bg:       rgba(239,68,68,0.10);
+        --info-color:      #818cf8;
+        --info-bg:         rgba(129,140,248,0.08);
+        --scrollbar-track: #0d0f13;
+        --scrollbar-thumb: #1e2535;
+      }
+      .log-panel {
+        width: 90%;
+        max-width: 640px;
+        margin: 16px auto 24px;
+        background: var(--log-bg);
+        border: 1px solid var(--log-border);
+        border-radius: 16px;
+        overflow: hidden;
+        font-family: 'JetBrains Mono', 'Courier New', monospace;
+        box-shadow: 0 0 0 1px var(--log-border-glow), 0 24px 48px rgba(0,0,0,0.6);
+      }
+      .log-header {
+        display: flex; align-items: center;
+        justify-content: space-between;
+        padding: 12px 18px;
+        background: var(--log-surface);
+        border-bottom: 1px solid var(--log-border);
+        user-select: none;
+      }
+      .log-header-left { display: flex; align-items: center; gap: 10px; }
+      .log-header-icon {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: var(--log-timestamp);
+        box-shadow: 0 0 8px var(--log-timestamp);
+        animation: pulse-dot 2s ease-in-out infinite;
+      }
+      @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+      .log-header-title {
+        font-family: 'Syne', sans-serif;
+        font-size: 11px; font-weight: 700;
+        letter-spacing: .15em; text-transform: uppercase;
+        color: var(--log-text);
+      }
+      .log-count-badge {
+        font-size: 10px; font-weight: 600;
+        color: var(--log-muted); background: var(--log-border);
+        padding: 2px 8px; border-radius: 100px;
+        letter-spacing: .05em; transition: color .3s;
+      }
+      .log-clear-btn {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px; color: var(--log-muted);
+        background: none; border: 1px solid var(--log-border);
+        border-radius: 6px; padding: 3px 10px; cursor: pointer;
+        letter-spacing: .08em; transition: color .2s, border-color .2s;
+      }
+      .log-clear-btn:hover { color: var(--danger-color); border-color: var(--danger-color); }
+      .log-scroll {
+        max-height: 280px; overflow-y: auto;
+        padding: 8px 0; scroll-behavior: smooth;
+      }
+      .log-scroll::-webkit-scrollbar { width: 4px; }
+      .log-scroll::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+      .log-scroll::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+      .log-entry {
+        display: grid;
+        grid-template-columns: 72px 1fr auto;
+        align-items: start; gap: 0 12px;
+        padding: 9px 18px;
+        border-left: 2px solid transparent;
+        transition: background .15s, border-color .15s;
+        animation: entry-slide .25s cubic-bezier(.16,1,.3,1) both;
+      }
+      @keyframes entry-slide { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:translateX(0)} }
+      .log-entry:hover { background: rgba(255,255,255,.02); }
+      .log-entry.safe   { border-left-color:var(--safe-color);   background:var(--safe-bg); }
+      .log-entry.warn   { border-left-color:var(--warn-color);   background:var(--warn-bg); }
+      .log-entry.danger { border-left-color:var(--danger-color); background:var(--danger-bg); animation:danger-flash .4s ease both,entry-slide .25s cubic-bezier(.16,1,.3,1) both; }
+      .log-entry.info   { border-left-color:var(--info-color);   background:var(--info-bg); }
+      @keyframes danger-flash { 0%{background:rgba(239,68,68,.25)} 100%{background:var(--danger-bg)} }
+      .log-ts  { font-size:10px; color:var(--log-timestamp); padding-top:1px; letter-spacing:.02em; white-space:nowrap; }
+      .log-msg { font-size:12px; color:var(--log-text); line-height:1.5; word-break:break-word; }
+      .log-msg strong { font-weight:600; color:#fff; }
+      .log-zone {
+        font-size:9px; font-weight:700; letter-spacing:.12em;
+        text-transform:uppercase; padding:2px 7px;
+        border-radius:100px; white-space:nowrap; align-self:start;
+      }
+      .log-entry.safe   .log-zone { color:var(--safe-color);   background:rgba(34,197,94,.15); }
+      .log-entry.warn   .log-zone { color:var(--warn-color);   background:rgba(245,158,11,.15); }
+      .log-entry.danger .log-zone { color:var(--danger-color); background:rgba(239,68,68,.18); }
+      .log-entry.info   .log-zone { color:var(--info-color);   background:rgba(129,140,248,.15); }
+      .log-empty {
+        display:flex; flex-direction:column; align-items:center;
+        justify-content:center; gap:8px; padding:40px 20px;
+        color:var(--log-muted);
+      }
+      .log-empty-icon { font-size:24px; opacity:.4; }
+      .log-empty-text { font-size:11px; letter-spacing:.1em; text-transform:uppercase; }
+      .log-footer {
+        display:flex; align-items:center;
+        justify-content:space-between;
+        padding:8px 18px;
+        border-top:1px solid var(--log-border);
+        background:var(--log-surface);
+      }
+      .log-footer-note { font-size:10px; color:var(--log-muted); letter-spacing:.05em; }
+      .log-footer-note span { color:var(--log-timestamp); }
+    </style>
+
+    <div class="log-panel" id="log-panel">
+      <div class="log-header">
+        <div class="log-header-left">
+          <div class="log-header-icon"></div>
+          <span class="log-header-title">Activity Log</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="log-count-badge" id="log-count">0 / 10</span>
+          <button class="log-clear-btn" onclick="VisionLog.clear()">clear</button>
+        </div>
+      </div>
+      <div class="log-scroll" id="log-scroll">
+        <div class="log-empty" id="log-empty">
+          <div class="log-empty-icon">◎</div>
+          <div class="log-empty-text">Awaiting detections</div>
+        </div>
+      </div>
+      <div class="log-footer">
+        <span class="log-footer-note">Last <span>10</span> events retained · Camera unaffected</span>
+        <span class="log-footer-note" id="log-session-time">Session: 00:00</span>
+      </div>
+    </div>
+
+    <script>
+    const VisionLog = (() => {
+      const MAX_LOGS  = 10;
+      const entries   = [];
+      const scrollEl  = document.getElementById('log-scroll');
+      const countEl   = document.getElementById('log-count');
+      const emptyEl   = document.getElementById('log-empty');
+      const sessionEl = document.getElementById('log-session-time');
+
+      const sessionStart = Date.now();
+      setInterval(() => {
+        const elapsed = Math.floor((Date.now() - sessionStart) / 1000);
+        const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+        const ss = String(elapsed % 60).padStart(2, '0');
+        sessionEl.textContent = `Session: ${mm}:${ss}`;
+      }, 1000);
+
+      function timestamp() {
+        return new Date().toLocaleTimeString('en-IN', {
+          hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false
+        });
+      }
+      function zoneLabel(z) {
+        return ({safe:'Safe',warn:'Warn',danger:'Danger',info:'Info'})[z] || 'Info';
+      }
+      function updateCount() {
+        countEl.textContent = `${entries.length} / ${MAX_LOGS}`;
+      }
+      function renderEntry(e) {
+        const el = document.createElement('div');
+        el.className = `log-entry ${e.zone}`;
+        el.dataset.id = e.id;
+        const msg = e.message.replace(/^([A-Z][a-z]+)/, '<strong>$1</strong>');
+        el.innerHTML = `<span class="log-ts">${e.ts}</span><span class="log-msg">${msg}</span><span class="log-zone">${zoneLabel(e.zone)}</span>`;
+        return el;
+      }
+      function add(message, zone = 'info') {
+        if (entries.length >= MAX_LOGS) {
+          const oldest = entries.shift();
+          const oldEl  = scrollEl.querySelector(`[data-id="${oldest.id}"]`);
+          if (oldEl) {
+            oldEl.style.transition = 'opacity .3s, transform .3s';
+            oldEl.style.opacity    = '0';
+            oldEl.style.transform  = 'translateX(-8px)';
+            setTimeout(() => oldEl.remove(), 300);
+          }
+        }
+        const entry = { id: Date.now() + Math.random(), ts: timestamp(), message, zone };
+        entries.push(entry);
+        if (emptyEl) emptyEl.style.display = 'none';
+        scrollEl.appendChild(renderEntry(entry));
+        requestAnimationFrame(() => { scrollEl.scrollTop = scrollEl.scrollHeight; });
+        updateCount();
+      }
+      function clear() {
+        entries.length = 0;
+        [...scrollEl.querySelectorAll('.log-entry')].forEach((el, i) => {
+          setTimeout(() => {
+            el.style.transition = 'opacity .2s, transform .2s';
+            el.style.opacity = '0';
+            el.style.transform = 'translateX(-8px)';
+            setTimeout(() => el.remove(), 200);
+          }, i * 30);
+        });
+        setTimeout(() => { if (emptyEl) emptyEl.style.display = 'flex'; }, 300);
+        updateCount();
+      }
+      return { add, clear };
+    })();
+    </script>
+
+    <script type="module" src="script.js?v=2.3"></script>
 </body>
 
 </html>

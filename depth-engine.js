@@ -55,12 +55,14 @@ class DepthEngine {
             this.isReady = true;
             this.isLoading = false;
             console.log('[DepthEngine] Model loaded successfully');
+            if (typeof VisionLog !== 'undefined') VisionLog.add('Depth-Anything V2 loaded', 'info');
 
             return { success: true };
 
         } catch (error) {
             console.error('[DepthEngine] Failed to load model:', error);
             this.isLoading = false;
+            if (typeof VisionLog !== 'undefined') VisionLog.add('Depth engine failed to load', 'warn');
             return { success: false, error: error.message };
         }
     }

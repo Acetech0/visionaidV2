@@ -22,9 +22,11 @@ export default class ObjectDetector {
             });
             this.isLoaded = true;
             console.log('[ObjectDetector] Model loaded successfully');
+            if (typeof VisionLog !== 'undefined') VisionLog.add('COCO-SSD model loaded', 'info');
             return { success: true };
         } catch (error) {
             console.error('[ObjectDetector] Failed to load model:', error);
+            if (typeof VisionLog !== 'undefined') VisionLog.add('COCO-SSD load failed', 'warn');
             return { success: false, error: error };
         }
     }

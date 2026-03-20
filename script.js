@@ -126,6 +126,7 @@ class VisionAidApp {
             console.log('[VisionAid] Step 5: Finalizing initialization...');
             this.updateSystemStatus('Ready');
             this.audioGuide.speakSystem('SYSTEM_READY');
+            if (typeof VisionLog !== 'undefined') VisionLog.add('VisionAid system ready', 'safe');
 
             // Start processing loop
             this.isRunning = true;
@@ -329,6 +330,7 @@ class VisionAidApp {
                 this.videoElement.play();
                 this.statusIndicator.classList.add('active');
                 this.updateToggleButtonState(true);
+                if (typeof VisionLog !== 'undefined') VisionLog.add('Camera started', 'info');
                 console.log('[Camera] ✓ Camera fully initialized and playing');
             };
 
@@ -351,6 +353,7 @@ class VisionAidApp {
         }
         this.statusIndicator.classList.remove('active');
         this.updateToggleButtonState(false);
+        if (typeof VisionLog !== 'undefined') VisionLog.add('Camera paused', 'info');
     }
 
     updateToggleButtonState(isOn) {
