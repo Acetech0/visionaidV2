@@ -159,28 +159,51 @@ class VisionAidApp {
 
         try {
             // 1. Object Detection
+            let detections = [];
             if (this.objectDetector && this.objectDetector.isLoaded) {
-                const detections = await this.objectDetector.detect(this.videoElement);
+                detections = await this.objectDetector.detect(this.videoElement);
                 this.drawDetections(detections);
+            }
 
-                // Navigation Assistance
-                // Try to get depth map
-                let depthMap = null;
-                if (this.depthEngine && this.depthEngine.isReady) {
-                    // We need the latest depth map. 
-                    // processFrame logic usually runs depth estimation.
-                    // For now, let's assume depthEngine has a 'lastDepthMap' or we run it?
-                    // The original processFrame likely ran depthEngine.estimateDepth().
-                    // Let's run it here if we can, or skip if too expensive?
-                    // Depth estimation is expensive. Let's try to run it.
-                    const depthResult = await this.depthEngine.estimateDepth(this.videoElement);
-                    if (depthResult.success) {
-                        depthMap = depthResult.depthMap;
-                    }
+            // 2. Depth Estimation
+            let depthMap = null;
+            let geometryResult = null;
+            if (this.depthEngine && this.depthEngine.isReady) {
+                const depthResult = await this.depthEngine.estimateDepth(this.videoElement);
+                if (depthResult.success) {
+                    depthMap = depthResult.depthMap;
+
+                    // 3. Geometry Validation (runs every frame depth is available)
+                    geometryResult = this.geometryValidator.analyze(depthMap);
                 }
+            }
 
+            // 4. Motion Detection
+            const motionResult = this.motionDetector.detect(this.videoElement);
+
+            // 5. Fusion Logic — combines depth + geometry + motion into a zone decision
+            if (geometryResult) {
+                const fusionResult = this.fusionLogic.fuse(
+                    depthMap ? { success: true, depthMap } : { success: false },
+                    geometryResult,
+                    motionResult
+                );
+
+                if (fusionResult && fusionResult.success) {
+                    // Update zone indicator UI
+                    this.updateZoneDisplay(fusionResult.zone);
+
+                    // Audio guidance from AudioGuide (zone-based warnings)
+                    this.audioGuide.updateGuidance(fusionResult);
+                }
+            }
+
+            // 6. Navigation Assistance (object-specific dodge guidance)
+            if (detections.length > 0) {
                 // Pass adaptiveK from geometry-validator (Improvement #9)
-                const adaptiveK = (geometryResult && geometryResult.adaptiveK) ? geometryResult.adaptiveK : 0.6;
+                const adaptiveK = (geometryResult && geometryResult.adaptiveK)
+                    ? geometryResult.adaptiveK
+                    : 0.6;
 
                 const guidance = this.navAssistant.evaluate(
                     detections,
@@ -377,6 +400,26 @@ class VisionAidApp {
             this.toggleBtn.classList.remove('active');
             this.toggleBtn.classList.add('off');
             this.toggleBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M21 21l-2-2m-3.268-3.268L6 6"></path><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path></svg>`;
+        }
+    }
+
+    updateZoneDisplay(zone) {
+        if (!this.zoneIndicator || !this.zoneText) return;
+
+        // Reset to base class only
+        this.zoneIndicator.className = 'zone-indicator';
+
+        if (zone === 'Very Close') {
+            this.zoneIndicator.classList.add('zone-danger');
+            this.zoneText.textContent = '⚠ VERY CLOSE';
+        } else if (zone === 'Near') {
+            this.zoneIndicator.classList.add('zone-warning');
+            this.zoneText.textContent = '! NEAR';
+        } else if (zone === 'Clear') {
+            this.zoneIndicator.classList.add('zone-safe');
+            this.zoneText.textContent = '✓ CLEAR';
+        } else {
+            this.zoneText.textContent = '● SAFE';
         }
     }
 
