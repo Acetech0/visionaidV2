@@ -185,7 +185,8 @@ class VisionAidApp {
             // 4. Motion Detection
             const motionResult = this.motionDetector.detect(this.videoElement);
 
-            // 5. Fusion Logic — combines depth + geometry + motion into a zone decision
+            // 5. Fusion + Navigation
+            // ── If depth engine is running, use geometry zone ───────────────────────
             if (geometryResult) {
                 const fusionResult = this.fusionLogic.fuse(
                     depthMap ? { success: true, depthMap } : { success: false },
@@ -194,17 +195,63 @@ class VisionAidApp {
                 );
 
                 if (fusionResult && fusionResult.success) {
-                    // Update zone indicator UI
                     this.updateZoneDisplay(fusionResult.zone);
+                    this.audioGuide.updateGuidance(fusionResult);
+                }
 
-                    // Audio guidance from AudioGuide (zone-based warnings)
+            // ── Depth unavailable — bbox-area fallback zone ────────────────────
+            } else if (detections.length > 0) {
+                const fW = this.videoElement.videoWidth  || 640;
+                const fH = this.videoElement.videoHeight || 480;
+                const frameArea = fW * fH;
+
+                // Pick the largest (most prominent) detection
+                const primary  = detections.reduce((best, d) => {
+                    const a = d.bbox[2] * d.bbox[3];
+                    return a > (best.bbox[2] * best.bbox[3]) ? d : best;
+                }, detections[0]);
+
+                const coverage = (primary.bbox[2] * primary.bbox[3]) / frameArea;
+
+                // Coverage → estimated distance (emperically tuned)
+                let estDist;
+                if      (coverage > 0.30) estDist = 0.8;  // VERY_CLOSE
+                else if (coverage > 0.15) estDist = 1.8;  // NEAR
+                else if (coverage > 0.06) estDist = 3.5;  // approach zone
+                else                      estDist = 6.0;  // CLEAR
+
+                const bboxZone = estDist < CONFIG.ZONES.VERY_CLOSE ? ZONE_LABELS.VERY_CLOSE
+                               : estDist < CONFIG.ZONES.NEAR       ? ZONE_LABELS.NEAR
+                               : ZONE_LABELS.CLEAR;
+
+                // Build a synthetic geometry result so fuse() works normally
+                const syntheticGeometry = {
+                    success: true,
+                    zone: bboxZone,
+                    distanceMeters: estDist,
+                    minDepth: 1 / Math.max(0.1, estDist), // pseudo disparity
+                    hasDiscontinuity: false,
+                    confidence: 0.55,   // lower confidence than real depth
+                    adaptiveK: 0.6,
+                    centralDepthStats: { mean: 0.5, min: 0.5, stdDev: 0 },
+                    isBboxFallback: true
+                };
+
+                const fusionResult = this.fusionLogic.fuse(
+                    { success: false },
+                    syntheticGeometry,
+                    motionResult
+                );
+
+                if (fusionResult && fusionResult.success) {
+                    this.updateZoneDisplay(fusionResult.zone);
                     this.audioGuide.updateGuidance(fusionResult);
                 }
             }
 
             // 6. Navigation Assistance (object-specific dodge guidance)
+            // ── Runs regardless of depth availability ────────────────────────
             if (detections.length > 0) {
-                // Pass adaptiveK from geometry-validator (Improvement #9)
                 const adaptiveK = (geometryResult && geometryResult.adaptiveK)
                     ? geometryResult.adaptiveK
                     : 0.6;

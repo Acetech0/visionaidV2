@@ -26,45 +26,62 @@ class DepthEngine {
      */
     async init() {
         if (this.isLoading || this.isReady) return;
-
         this.isLoading = true;
-        console.log('[DepthEngine] Initializing depth estimation model...');
 
-        try {
-            // Load Transformers.js
-            const { pipeline, env } = await import('@xenova/transformers');
-
-            // Configure environment
-            env.allowLocalModels = false;
-            env.allowRemoteModels = true;
-            env.backends.onnx.wasm.numThreads = 1;
-
-            console.log('[DepthEngine] Loading Depth-Anything model...');
-
-            // Initialize model
-            this.model = await pipeline(
-                'depth-estimation',
-                CONFIG.MODEL.PRIMARY, // Use config model path
-                { quantized: true }
-            );
-
-            // Setup canvas
-            this.canvas = document.createElement('canvas');
-            this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
-
-            this.isReady = true;
+        // Memory check — Transformers.js needs ~500MB, skip on low-memory devices
+        if (navigator.deviceMemory && navigator.deviceMemory < 4) {
+            const msg = `Low device memory (${navigator.deviceMemory}GB) — depth engine skipped`;
+            console.warn('[DepthEngine]', msg);
+            if (typeof VisionLog !== 'undefined') VisionLog.add(msg, 'warn');
             this.isLoading = false;
-            console.log('[DepthEngine] Model loaded successfully');
-            if (typeof VisionLog !== 'undefined') VisionLog.add('Depth-Anything V2 loaded', 'info');
-
-            return { success: true };
-
-        } catch (error) {
-            console.error('[DepthEngine] Failed to load model:', error);
-            this.isLoading = false;
-            if (typeof VisionLog !== 'undefined') VisionLog.add('Depth engine failed to load', 'warn');
-            return { success: false, error: error.message };
+            return { success: false, error: 'low_memory' };
         }
+
+        const MAX_ATTEMPTS = 3;
+        for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            try {
+                if (typeof VisionLog !== 'undefined')
+                    VisionLog.add(`Loading depth engine (${attempt}/${MAX_ATTEMPTS})...`, 'info');
+                console.log(`[DepthEngine] Attempt ${attempt}/${MAX_ATTEMPTS}...`);
+
+                const { pipeline, env } = await import('@xenova/transformers');
+
+                env.allowLocalModels  = false;
+                env.allowRemoteModels = true;
+                env.backends.onnx.wasm.numThreads = 1;
+
+                this.model = await pipeline(
+                    'depth-estimation',
+                    CONFIG.MODEL.PRIMARY,
+                    { quantized: true }
+                );
+
+                this.canvas = document.createElement('canvas');
+                this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+
+                this.isReady   = true;
+                this.isLoading = false;
+                console.log('[DepthEngine] Model loaded successfully');
+                if (typeof VisionLog !== 'undefined') VisionLog.add('Depth-Anything V2 ready ✓', 'info');
+                return { success: true };
+
+            } catch (err) {
+                const detail = err?.message || String(err);
+                console.error(`[DepthEngine] Attempt ${attempt} failed:`, err);
+                if (typeof VisionLog !== 'undefined')
+                    VisionLog.add(`Depth engine attempt ${attempt} failed: ${detail}`, 'warn');
+
+                if (attempt < MAX_ATTEMPTS) {
+                    await new Promise(r => setTimeout(r, 2000)); // wait 2s before retry
+                }
+            }
+        }
+
+        // All attempts exhausted
+        this.isLoading = false;
+        if (typeof VisionLog !== 'undefined')
+            VisionLog.add('Depth engine unavailable — bbox fallback active', 'warn');
+        return { success: false, error: 'all_attempts_failed' };
     }
 
     /**
