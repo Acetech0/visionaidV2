@@ -224,7 +224,9 @@ class MotionDetector {
     }
 
     /**
-     * Analyze motion vectors to detect approaching objects
+     * Analyze motion vectors to detect approaching objects.
+     * Improvement #3: uses median expansion rate as walking baseline so that
+     * normal user locomotion is not mis-classified as an incoming threat.
      */
     analyzeMotion(motionVectors) {
         if (!motionVectors || motionVectors.length === 0) {
@@ -236,18 +238,12 @@ class MotionDetector {
             };
         }
 
-        // Calculate average motion magnitude
+        // Average magnitude & direction (unchanged)
         const avgMagnitude = motionVectors.reduce((sum, v) => sum + v.magnitude, 0) / motionVectors.length;
-
-        // Calculate average motion direction
         const avgDx = motionVectors.reduce((sum, v) => sum + v.dx, 0) / motionVectors.length;
         const avgDy = motionVectors.reduce((sum, v) => sum + v.dy, 0) / motionVectors.length;
 
-        // Detect if motion is significant
         const hasMotion = avgMagnitude > CONFIG.MOTION_THRESHOLD;
-
-        // Detect approaching motion (expansion pattern or forward motion)
-        // In a camera view, approaching objects appear to expand outward from center
         const isApproaching = this.detectApproachingPattern(motionVectors);
 
         return {
@@ -259,34 +255,43 @@ class MotionDetector {
     }
 
     /**
-     * Detect if motion pattern indicates approaching object
+     * Improvement #3 — Relative optical flow baseline.
+     * Computes the expansion rate (outward component) for every vector, then
+     * takes the MEDIAN as the user's walking background.  Only vectors that
+     * expand MORE THAN 1.8× that median are treated as genuine threats.
+     * This removes the constant false-positive caused by the user walking.
      */
     detectApproachingPattern(motionVectors) {
         if (motionVectors.length < 4) return false;
 
-        // Count vectors moving outward from center
         const { width, height } = this.canvas;
-        const centerX = width / 2;
+        const centerX = width  / 2;
         const centerY = height / 2;
 
-        let outwardCount = 0;
+        // Compute per-vector outward expansion rate
+        const expansionRates = motionVectors.map(v => {
+            const toCenterX = v.x - centerX;
+            const toCenterY = v.y - centerY;
+            const radialLen = Math.sqrt(toCenterX * toCenterX + toCenterY * toCenterY) || 1;
+            // Dot product (positive = outward) normalised by radial distance
+            const dot = (toCenterX * v.dx + toCenterY * v.dy) / radialLen;
+            return dot; // positive means expanding toward camera
+        });
 
-        for (const vector of motionVectors) {
-            // Vector from center to point
-            const toCenterX = vector.x - centerX;
-            const toCenterY = vector.y - centerY;
+        // Median expansion rate = user's walking baseline
+        const sorted = [...expansionRates].sort((a, b) => a - b);
+        const mid    = Math.floor(sorted.length / 2);
+        const medianExpansion = sorted.length % 2 === 0
+            ? (sorted[mid - 1] + sorted[mid]) / 2
+            : sorted[mid];
 
-            // Dot product with motion vector
-            const dotProduct = toCenterX * vector.dx + toCenterY * vector.dy;
+        // Only count vectors significantly above the baseline (80% faster)
+        const threshold = Math.max(CONFIG.MOTION_THRESHOLD, medianExpansion * 1.8);
+        const threateningCount = expansionRates.filter(r => r > threshold).length;
 
-            // Positive dot product means moving away from center (expansion)
-            if (dotProduct > 0 && vector.magnitude > CONFIG.MOTION_THRESHOLD) {
-                outwardCount++;
-            }
-        }
-
-        // If majority of motion is outward, object is approaching
-        return outwardCount > motionVectors.length * 0.6;
+        // Require at least 30% of vectors to be threatening (less strict than 60%
+        // because we've already filtered by relative baseline)
+        return threateningCount > motionVectors.length * 0.3;
     }
 
     /**

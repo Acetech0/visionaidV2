@@ -7,9 +7,14 @@ import { CONFIG, ZONE_LABELS } from './config.js';
 
 class FusionLogic {
     constructor() {
-        this.zoneHistory = [];
+        this.zoneHistory  = [];
         this.depthHistory = [];
         this.lastStableZone = ZONE_LABELS.UNKNOWN;
+
+        // Improvement #4: EMA smoothing
+        this.smoothedDepth = null;   // lazily initialised
+        this.EMA_ALPHA     = 0.3;    // weight for newest sample
+        this.BUFFER_SIZE   = 7;      // extended from 2 → 7 frames
     }
 
     /**
@@ -35,11 +40,16 @@ class FusionLogic {
             const hasMotion = motionData.success ? motionData.hasMotion : false;
             const isApproaching = motionData.success ? motionData.isApproaching : false;
 
-            // Add to history
-            this.zoneHistory.push(geometryZone);
-            this.depthHistory.push(minDepth);
+            // Add to history — using EMA-smoothed depth (Improvement #4)
+            const rawDepth = minDepth;
+            this.smoothedDepth = this.smoothedDepth === null
+                ? rawDepth
+                : this.EMA_ALPHA * rawDepth + (1 - this.EMA_ALPHA) * this.smoothedDepth;
 
-            if (this.zoneHistory.length > CONFIG.TEMPORAL_BUFFER_SIZE) {
+            this.zoneHistory.push(geometryZone);
+            this.depthHistory.push(this.smoothedDepth);
+
+            if (this.zoneHistory.length > this.BUFFER_SIZE) {
                 this.zoneHistory.shift();
                 this.depthHistory.shift();
             }
@@ -82,6 +92,14 @@ class FusionLogic {
 
             // Update stable zone if confidence is high
             if (confidence > 0.8) {
+                // Log zone transition to activity panel
+                if (finalZone !== this.lastStableZone && typeof VisionLog !== 'undefined') {
+                    const logZone = finalZone === ZONE_LABELS.VERY_CLOSE ? 'danger'
+                                  : finalZone === ZONE_LABELS.NEAR       ? 'warn'
+                                  : finalZone === ZONE_LABELS.CLEAR      ? 'safe'
+                                  : 'info';
+                    VisionLog.add(`Zone → ${finalZone}`, logZone);
+                }
                 this.lastStableZone = finalZone;
             }
 
@@ -193,9 +211,10 @@ class FusionLogic {
      * Reset fusion state
      */
     reset() {
-        this.zoneHistory = [];
+        this.zoneHistory  = [];
         this.depthHistory = [];
         this.lastStableZone = ZONE_LABELS.UNKNOWN;
+        this.smoothedDepth  = null;
     }
 }
 

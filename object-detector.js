@@ -3,10 +3,13 @@
  */
 export default class ObjectDetector {
     constructor() {
-        this.model = null;
-        this.isLoaded = false;
-        this.minConfidence = 0.6; // Minimum confidence to report a detection
+        this.model          = null;
+        this.isLoaded       = false;
+        // Improvement #6: lower threshold but require 2-frame confirmation
+        this.minConfidence  = 0.45;
         this.lastDetections = [];
+        // Map<class+bbox_key, consecutiveCount>
+        this._pendingMap    = new Map();
     }
 
     /**
@@ -36,20 +39,38 @@ export default class ObjectDetector {
      * @param {HTMLVideoElement|HTMLImageElement|HTMLCanvasElement} imageElement 
      */
     async detect(imageElement) {
-        if (!this.isLoaded || !this.model) {
-            return [];
-        }
+        if (!this.isLoaded || !this.model) return [];
 
         try {
-            // predictions is an array of { class, score, bbox: [x, y, width, height] }
             const predictions = await this.model.detect(imageElement);
 
-            // Filter by confidence
-            this.lastDetections = predictions.filter(
-                prediction => prediction.score >= this.minConfidence
-            );
+            // Improvement #6: 0.45 threshold + 2-frame confirmation
+            const candidates = predictions.filter(p => p.score >= this.minConfidence);
 
-            return this.lastDetections;
+            // Build a key per detection (class + rough grid position)
+            const makeKey = d => {
+                const gx = Math.round(d.bbox[0] / 80);
+                const gy = Math.round(d.bbox[1] / 80);
+                return `${d.class}-${gx}-${gy}`;
+            };
+
+            const currentKeys = new Set(candidates.map(makeKey));
+
+            // Increment counts for detections seen this frame
+            const nextMap = new Map();
+            for (const det of candidates) {
+                const key   = makeKey(det);
+                const count = (this._pendingMap.get(key) || 0) + 1;
+                nextMap.set(key, count);
+            }
+            // Zero out any key not seen this frame
+            this._pendingMap = nextMap;
+
+            // Only pass through detections confirmed in >= 2 consecutive frames
+            const confirmed = candidates.filter(det => (this._pendingMap.get(makeKey(det)) || 0) >= 2);
+
+            this.lastDetections = confirmed;
+            return confirmed;
         } catch (error) {
             console.warn('[ObjectDetector] Detection error:', error);
             return [];

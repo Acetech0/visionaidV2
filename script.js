@@ -179,17 +179,28 @@ class VisionAidApp {
                     }
                 }
 
+                // Pass adaptiveK from geometry-validator (Improvement #9)
+                const adaptiveK = (geometryResult && geometryResult.adaptiveK) ? geometryResult.adaptiveK : 0.6;
+
                 const guidance = this.navAssistant.evaluate(
                     detections,
                     this.videoElement.videoWidth,
                     this.videoElement.videoHeight,
-                    depthMap
+                    depthMap,
+                    adaptiveK
                 );
 
                 if (guidance) {
                     console.log('[VisionAid] Guidance:', guidance.message);
-                    // Speak guidance
-                    this.audioGuide.speak(guidance.message, 'navigation');
+                    // Improvement #5: pass objectClass + dodgeSide for per-object cooldown
+                    const dodgeSide = guidance.action === 'Object Left'  ? 'right'
+                                    : guidance.action === 'Object Right' ? 'left'
+                                    : guidance.action === 'Dodge'        ? 'dodge'
+                                    : '';
+                    this.audioGuide.speak(
+                        guidance.message, 'navigation', guidance.distance,
+                        guidance.object || '', dodgeSide
+                    );
                     this.updateSystemStatus(guidance.action);
                 }
             }

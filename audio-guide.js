@@ -115,9 +115,17 @@ class AudioGuide {
 
 
     /**
-     * Speak a message with priority and cooldown management
+     * Speak a message with priority and cooldown management.
+     * Improvements #5 & #7:
+     *   #5 - Cooldown key = zone+objectClass+dodgeSide (not just zone)
+     *   #7 - Tiered cooldowns: DANGER=1.5s, WARNING=3s, SAFE/INFO=5s
+     * @param {string} message      - Message to speak
+     * @param {string} priority     - 'critical', 'high', 'navigation', 'normal', 'low'
+     * @param {string} zone         - Associated zone
+     * @param {string} [objectClass=''] - COCO-SSD class of the primary threat
+     * @param {string} [dodgeSide='']   - 'left', 'right', or '' for non-directional
      */
-    speak(message, priority = 'normal', zone = null) {
+    speak(message, priority = 'normal', zone = null, objectClass = '', dodgeSide = '') {
         if (!this.isInitialized || !this.synthesis) return;
 
         const now = Date.now();
@@ -140,8 +148,9 @@ class AudioGuide {
             return;
         }
 
-        // Check zone cooldown
-        if (zone && !this.canSpeak(zone, priority)) {
+        // Check zone cooldown — using composite key (Improvement #5)
+        const cooldownKey = zone ? `${zone}-${objectClass}-${dodgeSide}` : null;
+        if (cooldownKey && !this.canSpeak(cooldownKey, priority)) {
             return;
         }
 
@@ -187,10 +196,11 @@ class AudioGuide {
                 this.isSpeaking = false;
                 this.lastSpeechEnd = Date.now();
                 this.currentUtterance = null; // Release ref
-                if (zone) {
-                    this.lastMessageTime[zone] = Date.now();
-                    this.lastSpokenZone = zone;
+                // Improvement #5: record cooldown against composite key
+                if (cooldownKey) {
+                    this.lastMessageTime[cooldownKey] = Date.now();
                 }
+                if (zone) this.lastSpokenZone = zone;
             };
 
             utterance.onerror = (event) => {
@@ -218,36 +228,32 @@ class AudioGuide {
     }
 
     /**
-     * Check if we can speak for a given zone (cooldown check)
+     * Check if we can speak for a given cooldown key (Improvement #5)
      */
-    canSpeak(zone, priority) {
-        // Critical messages always allowed
+    canSpeak(key, priority) {
         // Critical and Navigation messages always allowed
         if (priority === 'critical' || priority === 'navigation') {
             return true;
         }
 
-        const now = Date.now();
-        const lastTime = this.lastMessageTime[zone] || 0;
-        const cooldown = this.getCooldown(zone);
+        const now      = Date.now();
+        const lastTime = this.lastMessageTime[key] || 0;
+        const cooldown = this.getCooldown(key);
 
         return (now - lastTime) >= cooldown;
     }
 
     /**
-     * Get cooldown duration for a zone
+     * Improvement #7: Tiered TTS cooldowns based on danger level.
+     * Key format: "zone-class-side", e.g. "Very Close-person-right"
+     *   DANGER  (Very Close) = 1.5 s
+     *   WARNING (Near)       = 3.0 s
+     *   SAFE / INFO / other  = 5.0 s
      */
-    getCooldown(zone) {
-        switch (zone) {
-            case ZONE_LABELS.VERY_CLOSE:
-                return CONFIG.COOLDOWN.VERY_CLOSE;
-            case ZONE_LABELS.NEAR:
-                return CONFIG.COOLDOWN.NEAR;
-            case ZONE_LABELS.CLEAR:
-                return CONFIG.COOLDOWN.CLEAR;
-            default:
-                return CONFIG.COOLDOWN.UNCERTAIN;
-        }
+    getCooldown(key) {
+        if (key.startsWith('Very Close')) return 1500;
+        if (key.startsWith('Near'))       return 3000;
+        return 5000;
     }
 
     /**

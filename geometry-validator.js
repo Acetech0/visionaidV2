@@ -7,7 +7,14 @@ import { CONFIG, ZONE_LABELS } from './config.js';
 
 class GeometryValidator {
     constructor() {
-        // No caching needed for single-pass approach
+        // Improvement #9: adaptive depth scale K
+        this.EXPECTED_BASELINE = 0.1;   // expected median center depth for ~6m open corridor
+        this.K_BASE            = 0.6;   // empirical constant from original calibration
+        this.adaptiveK         = 0.6;   // starts at baseline, updates after calibration
+        this._calibSamples     = [];    // accumulates center-path depth samples
+        this._calibFrames      = 0;
+        this._calibDone        = false;
+        this.CALIB_FRAMES      = 20;    // number of startup frames to sample
     }
 
     /**
@@ -82,12 +89,29 @@ class GeometryValidator {
             // Detect depth discontinuities (high variance)
             const hasDiscontinuity = stdDev > CONFIG.DEPTH_SPIKE_THRESHOLD;
 
-            // Convert to distance/zone
+            // Improvement #9: adaptive K calibration (first CALIB_FRAMES frames)
+            if (!this._calibDone) {
+                this._calibSamples.push(mean);
+                this._calibFrames++;
+                if (this._calibFrames >= this.CALIB_FRAMES) {
+                    const avgBaseline = this._calibSamples.reduce((s, v) => s + v, 0) / this._calibSamples.length;
+                    this.adaptiveK = this.K_BASE * (avgBaseline / this.EXPECTED_BASELINE);
+                    // Clamp to sane range [0.3, 1.5]
+                    this.adaptiveK = Math.min(1.5, Math.max(0.3, this.adaptiveK));
+                    this._calibDone = true;
+                    console.log(`[GeometryValidator] Adaptive K calibrated: ${this.adaptiveK.toFixed(3)}`);
+                    if (typeof VisionLog !== 'undefined') {
+                        VisionLog.add(`Depth scale K=${this.adaptiveK.toFixed(2)} calibrated`, 'info');
+                    }
+                }
+            }
+
+            // Convert to distance/zone using adaptiveK
             const distanceMeters = this.estimateDistance(percentile5);
 
             let zone = ZONE_LABELS.CLEAR;
             if (distanceMeters < CONFIG.ZONES.VERY_CLOSE) zone = ZONE_LABELS.VERY_CLOSE;
-            else if (distanceMeters < CONFIG.ZONES.NEAR) zone = ZONE_LABELS.NEAR;
+            else if (distanceMeters < CONFIG.ZONES.NEAR)  zone = ZONE_LABELS.NEAR;
 
             // Calculate confidence
             const confidence = Math.max(0, 1 - (stdDev / 0.5));
@@ -99,6 +123,7 @@ class GeometryValidator {
                 minDepth: percentile5,
                 hasDiscontinuity,
                 confidence,
+                adaptiveK: this.adaptiveK,
                 centralDepthStats: { mean, min, stdDev }
             };
 
@@ -109,31 +134,20 @@ class GeometryValidator {
     }
 
     /**
-     * Estimate rough distance in meters from normalized depth
+     * Estimate rough distance in meters from normalized depth.
+     * Improvement #9: uses adaptiveK instead of hardcoded 0.6
      */
     estimateDistance(depthVal) {
-        // Empirically tuned mapping
-        // depthVal: 0 (far) to 1 (close)
-
-        // Inverse relationship: Distance ~ 1/Depth
-        // If max depth (1.0) is ~0.5m (very close)
-        // Then min depth (0.05) should be ~10m+
-
         const safeDisp = Math.max(0.05, depthVal);
-        // Scalar K = 0.5 * 1.0 = 0.5 (for close range consistency) -> Too small
-        // Let's try matching the users range:
-        // very close < 3m. depth > ~0.2
-        // near < 6m. depth > ~0.1
-
-        // func: meters = K / depth
-        // 3 = K / 0.2 -> K = 0.6
-        // Check: 6 = 0.6 / 0.1 -> matches.
-
-        const K = 0.6;
-        const estimatedMeters = K / safeDisp;
-
-        // Clamp to reasonable range [0.3m, 12.0m]
+        const estimatedMeters = this.adaptiveK / safeDisp;
         return Math.min(Math.max(estimatedMeters, 0.3), 12.0);
+    }
+
+    /**
+     * Expose the current adaptive K for other modules (e.g., navigation-assistant).
+     */
+    getAdaptiveK() {
+        return this.adaptiveK;
     }
 }
 
